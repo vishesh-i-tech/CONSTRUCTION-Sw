@@ -16,6 +16,8 @@ import { recordRoutes } from './routes/records.js';
 import { materialRequestRoutes } from './routes/materialRequests.js';
 import { taskRoutes } from './routes/tasks.js';
 import { escalationRoutes } from './routes/escalations.js';
+import { voiceRoutes } from './routes/voice.js';
+import { whatsappRoutes } from './routes/whatsapp.js';
 
 dotenv.config();
 
@@ -69,6 +71,8 @@ export async function buildServer() {
   await server.register(materialRequestRoutes);
   await server.register(taskRoutes);
   await server.register(escalationRoutes);
+  await server.register(voiceRoutes);
+  await server.register(whatsappRoutes);
 
   // Root welcome route
   server.get('/', async () => {

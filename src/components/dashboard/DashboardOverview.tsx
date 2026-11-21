@@ -14,6 +14,8 @@ import {
   Receipt,
   HandCoins,
   ArrowRight,
+  MessageCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 interface DashboardOverviewProps {
@@ -30,6 +32,7 @@ interface DashboardOverviewProps {
   onOpenOcrModal: () => void;
   onNavigateTab: (tab: ActiveTab, filter?: 'all' | 'ongoing' | 'completed' | 'planning') => void;
   onOpenReport: (site: Site) => void;
+  onOpenWhatsAppDigest?: () => void;
   contractorName?: string;
   companyName?: string;
   searchQuery?: string;
@@ -47,6 +50,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenOcrModal,
   onNavigateTab,
   onOpenReport,
+  onOpenWhatsAppDigest,
   contractorName,
   companyName,
   searchQuery = '',
@@ -304,8 +308,34 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-
       </div>
+
+      {/* 4. Automated 8:30 PM WhatsApp Daily Site Digest Card */}
+      {onOpenWhatsAppDigest && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/20 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+              <MessageCircle className="w-5 h-5 fill-white" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                {language === 'hi' ? 'व्हाट्सएप दैनिक साइट सारांश (8:30 PM)' : 'Daily WhatsApp Executive Digest'}
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                {language === 'hi' ? 'आज की रिपोर्ट, लेबर व पेंडिंग टास्क व्हाट्सएप पर शेयर करें' : '1-tap share today\'s DPR, labour muster & tasks to WhatsApp'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenWhatsAppDigest}
+            className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+          >
+            <span>{language === 'hi' ? 'साझा करें' : 'Share'}</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
     </div>
   );

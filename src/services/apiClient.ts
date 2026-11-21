@@ -563,3 +563,63 @@ export async function apiRunEscalationCheck() {
 export async function apiGetNotifications() {
   return apiRequest<{ notifications: any[] }>('/api/v1/escalations');
 }
+
+// ==========================================
+// Phase 5: AI Voice Automation & WhatsApp
+// ==========================================
+
+export interface ExtractedVoiceActionResult {
+  actionType: 'material_request' | 'site_task' | 'expense' | 'site_create' | 'site_note';
+  confidence: number;
+  transcript: string;
+  source: 'gemini' | 'rules_engine';
+  extractedData: {
+    siteName?: string;
+    siteId?: string;
+    itemName?: string;
+    title?: string;
+    description?: string;
+    quantity?: number;
+    unit?: string;
+    urgency?: 'low' | 'normal' | 'urgent';
+    priority?: 'low' | 'medium' | 'high';
+    dueDate?: string;
+    amount?: number;
+    paymentStatus?: 'paid' | 'pending';
+    vendorName?: string;
+    notes?: string;
+  };
+}
+
+export async function apiExtractVoiceAction(data: { transcript: string; siteId?: string }) {
+  return apiRequest<{ message: string; action: ExtractedVoiceActionResult }>('/api/v1/voice/extract-action', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface DailyDigestResult {
+  date: string;
+  totalSites: number;
+  reportedSites: number;
+  pendingSites: number;
+  fullDayCount: number;
+  halfDayCount: number;
+  stoppedCount: number;
+  pendingMaterialsCount: number;
+  overdueTasksCount: number;
+  messageText: string;
+  waLink: string;
+}
+
+export async function apiGetDailyDigest(phone?: string) {
+  const query = phone ? `?phone=${encodeURIComponent(phone)}` : '';
+  return apiRequest<{ message: string; digest: DailyDigestResult }>(`/api/v1/whatsapp/daily-digest${query}`);
+}
+
+export async function apiSendDailyDigest(recipientPhone?: string) {
+  return apiRequest<{ message: string; digest: DailyDigestResult; sendResult: any }>('/api/v1/whatsapp/send-digest', {
+    method: 'POST',
+    body: JSON.stringify({ recipientPhone }),
+  });
+}

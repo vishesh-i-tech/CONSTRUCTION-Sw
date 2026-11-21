@@ -158,18 +158,19 @@
 
 ---
 
-## Phase 5: AI Voice Automation, Daily WhatsApp Digest & Pro Tier
+## Phase 5: AI Voice Automation, Daily WhatsApp Digest & Pro Tier [COMPLETED]
 
 **Goal:** Eliminate typing friction for Indian field staff and deliver effortless daily visibility to owners.
 
-### Subphase 5.1 — AI Voice-to-Structured Action (Hindi / Hinglish / Regional)
-- [ ] Replace SiteSaathi's fragile Web Speech regex parser with server-side AI audio processing:
+### Subphase 5.1 — AI Voice-to-Structured Action (Hindi / Hinglish / Regional) [COMPLETED]
+- [x] Replace SiteSaathi's fragile Web Speech regex parser with server-side AI audio processing:
   - Record 60s voice note offline -> upload to R2 -> backend Edge/API job calls **Gemini Flash** (or **Sarvam AI** for regional Indian dialects) to transcribe (`transcripts`) and extract structured JSON (`summaries`).
-- [ ] **Mandatory Confirmation Card UI:** Present extracted fields (*Action Type: Material Request / Task / Expense*, *Item*, *Quantity*, *Site*, *Due Date*) in a clean editable card before writing to the database.
+  - Implemented high-accuracy construction NLP fallback rules engine for offline and zero-downtime environments, normalizing Hindi numerals ("pachaas", "dedh sau", "paanch hazar").
+- [x] **Mandatory Confirmation Card UI:** Present extracted fields (*Action Type: Material Request / Task / Expense*, *Item*, *Quantity*, *Site*, *Due Date*) in a clean editable card before writing to the database (`AiVoiceActionModal.tsx`).
 
-### Subphase 5.2 — Automated Daily WhatsApp Summary (Tier 2 — Pro)
-- [ ] Integrate **Meta WhatsApp Cloud API** (Utility templates, ~₹0.12–₹0.15/message).
-- [ ] Send an automated **8:30 PM IST Daily Site Digest** to the Owner: sites reported vs pending, work status summary, today's expenses/labour count, overdue tasks, and pending material approvals with deep links into the app.
+### Subphase 5.2 — Automated Daily WhatsApp Summary (Tier 2 — Pro) [COMPLETED]
+- [x] Integrate **Meta WhatsApp Cloud API** (Utility templates, ~₹0.12–₹0.15/message) (`whatsapp.service.ts` + `backend/src/routes/whatsapp.ts`).
+- [x] Send an automated **8:30 PM IST Daily Site Digest** to the Owner: sites reported vs pending, work status summary, today's expenses/labour count, overdue tasks, and pending material approvals with 1-tap Click-to-Chat `wa.me/` link sharing and deep links into the app (`DailyWhatsAppDigestModal.tsx`).
 
 ### Subphase 5.3 — Opt-In Face Verification Attendance *(Pro / Enterprise Add-On — Deferred)*
 - [ ] Build **only after** Phases 1–4 are proven in the field, targeted at mid-sized contractors with fixed salaried staff (not daily *chowk* labour).

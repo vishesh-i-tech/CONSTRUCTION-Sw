@@ -31,6 +31,8 @@ export function getDb() {
   return dbInstance;
 }
 
+export const db = dbInstance!;
+
 export function getSqlClient() {
   return libsqlClient;
 }

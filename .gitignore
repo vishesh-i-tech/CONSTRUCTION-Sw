@@ -34,3 +34,9 @@ dist-ssr
 key.properties
 android/key.properties
 android/app/key.properties
+
+# Local SQLite databases & test artifacts
+*.db
+*.db-journal
+*.sqlite
+

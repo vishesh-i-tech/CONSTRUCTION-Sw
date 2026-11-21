@@ -24,18 +24,21 @@ import {
   Maximize2,
   Plus,
   RefreshCw,
+  MessageCircle,
 } from 'lucide-react';
 
 interface OwnerDprFeedModalProps {
   isOpen: boolean;
   onClose: () => void;
   sites: Site[];
+  onOpenWhatsAppDigest?: () => void;
 }
 
 export const OwnerDprFeedModal: React.FC<OwnerDprFeedModalProps> = ({
   isOpen,
   onClose,
   sites,
+  onOpenWhatsAppDigest,
 }) => {
   const { language } = useTheme();
   const isHi = language === 'hi';
@@ -218,12 +221,26 @@ export const OwnerDprFeedModal: React.FC<OwnerDprFeedModalProps> = ({
                 : 'Review site reports, voice notes & anti-fake verification'}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-surface-raised hover:bg-border flex items-center justify-center text-muted-foreground transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenWhatsAppDigest && (
+              <button
+                type="button"
+                onClick={onOpenWhatsAppDigest}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                title={isHi ? 'व्हाट्सएप दैनिक रिपोर्ट देखें' : 'View Daily WhatsApp Digest'}
+              >
+                <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                <span className="hidden sm:inline">{isHi ? 'व्हाट्सएप सारांश' : 'WhatsApp Digest'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-surface-raised hover:bg-border flex items-center justify-center text-muted-foreground transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Filters Bar */}

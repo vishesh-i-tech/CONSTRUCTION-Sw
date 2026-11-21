@@ -56,6 +56,8 @@ import { TeamManagementModal } from './components/team/TeamManagementModal';
 import { MaterialRequestModal } from './components/materials/MaterialRequestModal';
 import { MaterialRequestsTrackerModal } from './components/materials/MaterialRequestsTrackerModal';
 import { SiteTasksModal } from './components/tasks/SiteTasksModal';
+import { AiVoiceActionModal } from './components/voice/AiVoiceActionModal';
+import { DailyWhatsAppDigestModal } from './components/reports/DailyWhatsAppDigestModal';
 
 export const App: React.FC = () => {
   const { trade, setTrade, language, setLanguage, t, tradeConfig } = useTheme();
@@ -101,6 +103,9 @@ export const App: React.FC = () => {
   const [isMaterialRequestOpen, setIsMaterialRequestOpen] = useState(false);
   const [isMaterialTrackerOpen, setIsMaterialTrackerOpen] = useState(false);
   const [isSiteTasksOpen, setIsSiteTasksOpen] = useState(false);
+
+  // FieldLog Phase 5 AI Voice & WhatsApp Digest State
+  const [isWhatsAppDigestOpen, setIsWhatsAppDigestOpen] = useState(false);
 
   // Selected site for drilldown modal
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
@@ -582,6 +587,7 @@ export const App: React.FC = () => {
               onOpenOcrModal={() => setIsOcrModalOpen(true)}
               onNavigateTab={handleNavigateTab}
               onOpenReport={handleOpenReportFromSite}
+              onOpenWhatsAppDigest={() => setIsWhatsAppDigestOpen(true)}
               contractorName={currentAccount?.name}
               companyName={currentAccount?.companyName}
               searchQuery={globalSearchQuery}
@@ -715,13 +721,20 @@ export const App: React.FC = () => {
         onOpenDprFeed={() => setIsOwnerDprFeedOpen(true)}
       />
 
-      {/* Voice Assistant AI Modal */}
-      <VoiceInputModal
+      {/* AI Voice Assistant Action Modal (Phase 5) */}
+      <AiVoiceActionModal
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}
-        onSiteCreated={() => {
+        sites={sites}
+        onActionConfirmed={(type) => {
           refreshInsights();
-          showToast('Site created via voice input!');
+          showToast(
+            type === 'material_request'
+              ? (language === 'hi' ? 'सामान अनुरोध सफलतापूर्वक दर्ज किया गया!' : 'Material request created via voice!')
+              : type === 'site_task'
+              ? (language === 'hi' ? 'टास्क सफलतापूर्वक दर्ज किया गया!' : 'Site task created via voice!')
+              : (language === 'hi' ? 'खर्च सफलतापूर्वक दर्ज किया गया!' : 'Expense recorded via voice!')
+          );
         }}
       />
 
@@ -1002,6 +1015,7 @@ export const App: React.FC = () => {
         isOpen={isOwnerDprFeedOpen}
         onClose={() => setIsOwnerDprFeedOpen(false)}
         sites={sites}
+        onOpenWhatsAppDigest={() => setIsWhatsAppDigestOpen(true)}
       />
 
       {/* Owner Custom Issue Chips */}
@@ -1046,6 +1060,14 @@ export const App: React.FC = () => {
         onClose={() => setIsSiteTasksOpen(false)}
         sites={sites}
         userRole={currentAccount?.role || 'owner'}
+      />
+
+      {/* Phase 5: Daily WhatsApp Executive Digest Modal */}
+      <DailyWhatsAppDigestModal
+        isOpen={isWhatsAppDigestOpen}
+        onClose={() => setIsWhatsAppDigestOpen(false)}
+        sites={sites}
+        ownerPhone={currentAccount?.phone}
       />
 
       {/* Safety Confirmation Modal for Deletions */}

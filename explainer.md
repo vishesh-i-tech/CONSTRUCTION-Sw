@@ -37,6 +37,10 @@ This document tracks all technologies, libraries, and architectural modules used
 | **Material Indent & GRN Auto-Ledger** | Procurement & Operations | Closed-loop 3-tap request, vendor assignment & delivery with challan photo |
 | **Punch-List Tasks & Photo Proof Engine** | Quality & Punch List | Actionable task tracking with mandatory photo proof verification |
 | **Automated Site Escalation Engine** | Monitoring & Alerts | Scheduled site scanning for missing DPRs, urgent indents & overdue tasks |
+| **AI Voice Action Extractor & NLP Normalizer** | AI Automation & Voice | Multi-lingual construction voice-to-JSON action extraction (Hinglish/Hindi) |
+| **Mandatory Action Confirmation Card** | UI Architecture & Safety | Editable review card preventing automated AI hallucinations or erroneous DB writes |
+| **WhatsApp Daily Digest & wa.me/ Pipeline** | Executive Visibility & Comms | 8:30 PM IST automated contractor summary with 1-tap Click-to-Chat & Cloud API |
+
 
 ---
 
@@ -1510,6 +1514,48 @@ This document tracks all technologies, libraries, and architectural modules used
   - Scans `site_tasks` where `status != 'done'` and `dueDate < today`.
   - Writes deduplicated alerts into `notification_log` avoiding repetitive notification spam, and delivers active notifications via `GET /api/v1/escalations`.
 - **A short, simple summary:** Proactive monitoring engine alerting contractors to missing DPRs, urgent material bottlenecks, and overdue site tasks.
+
+---
+
+### 22. Technology: AI Voice-to-Structured Action Extractor & NLP Normalizer (`aiVoice.service.ts`, `backend/src/routes/voice.ts`)
+- **Name of the Technology:** Multi-Lingual Construction Voice Action Extraction Engine
+- **What it does (Role & Purpose):**
+  - Converts unstructured spoken voice notes or transcripts in Hindi, Hinglish, and English into structured construction business actions: Material Requests, Site Punch Tasks, Expense Entries, or New Site Creation.
+  - Eliminates manual typing friction for site supervisors and field contractors.
+- **How it works (Under the Hood):**
+  - Accepts transcripts or audio recordings at `POST /api/v1/voice/extract-action`.
+  - Integrates with Google Gemini Flash (`GEMINI_API_KEY`) using structured schema prompting for dialect understanding and construction vocabulary.
+  - Features an offline/zero-downtime construction regex NLP rules engine that parses colloquial phrases (e.g., "50 bori cement", "chhat ki dhalai kal dopahar tak khatam karni hai", "1500 rupay diesel ka kharcha") and normalizes Hindi numeral words ("das", "pachaas", "sau", "dedh sau", "hazaar", "paanch hazar").
+  - Matches spoken site names against the organization's active site database and suggests appropriate action classifications.
+- **A short, simple summary:** Server-side AI and rules engine that translates conversational site Hindi/Hinglish speech into structured database actions.
+
+---
+
+### 23. Technology: Mandatory Confirmation Card Architecture (`AiVoiceActionModal.tsx`)
+- **Name of the Technology:** Mandatory Confirmation Card UI & Cognitive Safeguard
+- **What it does (Role & Purpose):**
+  - Serves as a mandatory interactive barrier between raw AI extraction and database mutation.
+  - Guarantees that no hallucination, speech recognition glitch, or mistranslation directly mutates project ledgers, tasks, or material indents without explicit contractor verification.
+- **How it works (Under the Hood):**
+  - Presents extracted action type (`material_request`, `site_task`, `expense`), site selector, item/task title, numeric quantity, unit, urgency/priority, and notes in an intuitive, editable card layout.
+  - Allows the supervisor to correct any misidentified values or toggle the action type with a single tap.
+  - Upon user confirmation, securely commits the action directly into local Dexie.js offline tables (`materialRequests`, `siteTasks`, `dailyExpenses`) and enqueues immediate background sync through `enqueueSyncMutation`.
+- **A short, simple summary:** An editable review card ensuring contractors verify and approve AI-extracted actions before any database changes occur.
+
+---
+
+### 24. Technology: Automated WhatsApp Daily Digest & 1-Tap Click-to-Chat Pipeline (`whatsapp.service.ts`, `backend/src/routes/whatsapp.ts`, `DailyWhatsAppDigestModal.tsx`)
+- **Name of the Technology:** 8:30 PM IST Daily WhatsApp Digest & 1-Tap Click-to-Chat Pipeline
+- **What it does (Role & Purpose):**
+  - Delivers an executive evening summary of all active construction sites directly to the contractor/owner's phone via WhatsApp.
+  - Summarizes reported vs. pending site DPRs, work progress (full work, half day, stopped), labour muster headcount, urgent pending material requests, and overdue punch tasks.
+- **How it works (Under the Hood):**
+  - `whatsapp.service.ts` queries the organization's live data at 8:30 PM IST (or on-demand via `GET /api/v1/whatsapp/daily-digest`).
+  - Generates a beautifully formatted WhatsApp Markdown report with status icons, key metrics, and actionable deep-links.
+  - Produces pre-encoded 1-tap Click-to-Chat URLs (`https://wa.me/?text=...`) allowing instant sharing to contractor and partner WhatsApp groups without any third-party fees.
+  - Provides native Meta WhatsApp Business Cloud Graph API integration (`POST /api/v1/whatsapp/send-digest`) for Pro-tier automated message dispatch.
+- **A short, simple summary:** Comprehensive daily site summary delivered at 8:30 PM IST via 1-tap WhatsApp sharing or automated Meta Cloud API.
+
 
 
 
