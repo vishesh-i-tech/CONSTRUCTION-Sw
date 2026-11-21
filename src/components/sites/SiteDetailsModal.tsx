@@ -39,9 +39,12 @@ import {
   CreditCard,
   ArrowRight,
   Phone,
+  Share2,
 } from 'lucide-react';
+import { formatClientPaymentReceiptShare, shareNativeOrWhatsApp } from '../../utils/shareUtils';
 import { LabourDateDetailModal } from '../labour/LabourDateDetailModal';
 import { RecordClientPaymentModal } from './RecordClientPaymentModal';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
 
 interface SiteDetailsModalProps {
   site: Site | null;
@@ -93,6 +96,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'client_payments' | 'tools' | 'labour' | 'materials' | 'machinery' | 'dues'>('overview');
   const [selectedRecordForDetail, setSelectedRecordForDetail] = useState<LabourRecord | null>(null);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
 
   const siteId = site?.id;
 
@@ -157,10 +161,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
 
   if (!currentSite) return null;
 
-  const handleDeleteClientPayment = async (paymentId: string) => {
-    if (window.confirm(language === 'hi' ? 'क्या आप इस पेमेंट रसीद को हटाना चाहते हैं?' : 'Are you sure you want to delete this payment record?')) {
-      await db.deleteClientPayment(paymentId, currentSite.id);
-    }
+  const handleDeleteClientPayment = (paymentId: string) => {
+    setDeletingPaymentId(paymentId);
   };
 
   const handleUpdateWorkStatus = async (status: Site['workStatus']) => {
@@ -189,7 +191,7 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
   };
 
   const handleDownloadPdf = () => {
-    exportSiteReportPdf(currentSite, finance, tools, materials, dues, sortedClientPayments, account?.companyName);
+    exportSiteReportPdf(currentSite, finance, tools, materials, dues, sortedClientPayments, account?.companyName, labourRecords, machinery);
   };
 
   const handleDownloadClientReceiptsPdf = () => {
@@ -700,6 +702,30 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            onClick={() => {
+                              const shareText = formatClientPaymentReceiptShare(
+                                currentSite.name,
+                                currentSite.clientName || payment.payerName,
+                                payment.amount,
+                                payment.paymentMode,
+                                payment.paymentDate,
+                                finance?.clientBalanceDue,
+                                account?.companyName
+                              );
+                              shareNativeOrWhatsApp({
+                                title: `Payment Receipt — ${currentSite.name}`,
+                                text: shareText,
+                                phone: currentSite.clientPhone,
+                              });
+                            }}
+                            className="p-2 text-slate-400 hover:text-green-600 dark:hover:text-green-400 rounded-xl hover:bg-green-50 dark:hover:bg-green-950/40 transition-colors"
+                            title={language === 'hi' ? 'व्हाट्सएप पर रसीद भेजें' : 'Share Receipt on WhatsApp'}
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => exportIndividualReceiptPdf(currentSite, payment, account?.companyName)}
                             className="p-2 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
                             title={language === 'hi' ? 'रसीद वाउचर PDF डाउनलोड करें' : 'Download Receipt Voucher PDF'}
@@ -1015,6 +1041,8 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                           ? Math.round((e.dailyWage || 0) * 0.5)
                           : e.attendanceStatus === 'absent'
                           ? 0
+                          : e.attendanceStatus === 'overtime'
+                          ? Math.round((e.dailyWage || 0) * 1.5)
                           : (e.dailyWage || 0);
                         const paid = e.paidAmount !== undefined ? e.paidAmount : (e.attendanceStatus === 'absent' ? 0 : earned);
                         const due = e.balanceDue !== undefined ? e.balanceDue : Math.max(0, earned - paid);
@@ -1036,12 +1064,16 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
                                     ? 'text-red-500'
                                     : e.attendanceStatus === 'half_day'
                                     ? 'text-amber-500'
+                                    : e.attendanceStatus === 'overtime'
+                                    ? 'text-purple-500'
                                     : 'text-green-500'
                                 }`}>
                                   {e.attendanceStatus === 'absent'
                                     ? 'Absent'
                                     : e.attendanceStatus === 'half_day'
                                     ? 'Half Day'
+                                    : e.attendanceStatus === 'overtime'
+                                    ? 'Overtime'
                                     : 'Full Day'}
                                 </span>
                               </div>
@@ -1330,6 +1362,26 @@ export const SiteDetailsModal: React.FC<SiteDetailsModalProps> = ({
           setIsRecordPaymentOpen(false);
         }}
         clientBalanceDue={finance?.clientBalanceDue ?? currentSite.estimatedBudget}
+      />
+
+      {/* Confirm Delete Client Payment Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deletingPaymentId}
+        onClose={() => setDeletingPaymentId(null)}
+        onConfirm={async () => {
+          if (deletingPaymentId && currentSite) {
+            await db.deleteClientPayment(deletingPaymentId, currentSite.id);
+            setDeletingPaymentId(null);
+          }
+        }}
+        title={language === 'hi' ? 'पेमेंट रसीद हटाने की पुष्टि' : 'Confirm Delete Payment Receipt'}
+        message={
+          language === 'hi'
+            ? 'क्या आप वाकई इस पेमेंट रसीद को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।'
+            : 'Are you sure you want to delete this payment record? This action cannot be undone.'
+        }
+        account={account}
+        isAntiDeleteEnabled={account?.isAntiDeleteEnabled}
       />
     </div>
   );

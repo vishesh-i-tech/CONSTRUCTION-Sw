@@ -16,55 +16,55 @@
 
 ---
 
-## Phase 1: Stabilize SiteSaathi Core (Security, Financial Math & Android Hygiene)
+## Phase 1: Stabilize SiteSaathi Core (Security, Financial Math & Android Hygiene) [COMPLETED]
 
 **Goal:** Eliminate all critical data-loss, security, financial math, mobile UX, and Android APK bugs in the existing SiteSaathi codebase before merging backend sync.
 
-### Subphase 1.1 — Critical Security & Data-Safety Fixes
-- [ ] **Preserve Credentials on Clean Backup Restore (`database.ts`):** Merge incoming backup account fields with the existing local `ContractorAccount` so unencrypted backups never wipe `password`, `pinLock`, or security flags and brick the account.
-- [ ] **Fix Passphrase Trimming & Minimum Strength (`SettingsModal.tsx`, `database.ts`):** Trim passphrases before validation and reject any non-empty passphrase under 8 characters so whitespace inputs cannot export plaintext backups containing credential hashes.
-- [ ] **Scope `clearAllData()` & `seedDemoData()` (`database.ts`, `App.tsx`):** Restrict wipes and demo seeding strictly to the active `contractorId` so shared-device accounts can never delete or overwrite other contractors' data.
-- [ ] **Fix `AppLockScreen` & Settings PIN Sync (`AppLockScreen.tsx`, `SettingsModal.tsx`, `AuthScreen.tsx`):**
+### Subphase 1.1 — Critical Security & Data-Safety Fixes [COMPLETED]
+- [x] **Preserve Credentials on Clean Backup Restore (`database.ts`):** Merge incoming backup account fields with the existing local `ContractorAccount` so unencrypted backups never wipe `password`, `pinLock`, or security flags and brick the account.
+- [x] **Fix Passphrase Trimming & Minimum Strength (`SettingsModal.tsx`, `database.ts`):** Trim passphrases before validation and reject any non-empty passphrase under 8 characters so whitespace inputs cannot export plaintext backups containing credential hashes.
+- [x] **Scope `clearAllData()` & `seedDemoData()` (`database.ts`, `App.tsx`):** Restrict wipes and demo seeding strictly to the active `contractorId` so shared-device accounts can never delete or overwrite other contractors' data.
+- [x] **Fix `AppLockScreen` & Settings PIN Sync (`AppLockScreen.tsx`, `SettingsModal.tsx`, `AuthScreen.tsx`):**
   - Support 4–6 digit PINs (or explicit Unlock submit) without auto-submitting at 4 digits.
   - Atomically update both `password` and `pinLock` on PIN change, and require current-PIN verification before disabling PIN Lock, disabling Anti-Delete, or changing PIN.
   - Enforce `isAntiDeleteEnabled` inside `ConfirmDeleteModal.tsx` and replace `window.confirm` in `SiteDetailsModal.tsx` with `ConfirmDeleteModal`.
   - Remove the dead, insecure `src/components/auth/AuthModal.tsx` file and remove stubbed biometric promises until real native biometrics are wired.
-- [ ] **Close Multi-Contractor Isolation Leaks:**
+- [x] **Close Multi-Contractor Isolation Leaks:**
   - Filter `loadSavedContacts` in `AddSiteModal.tsx` and `EditSiteModal.tsx` by `activeContractorId`.
   - Display `validClientPayments.length` instead of `allClientPayments.length` in `DashboardOverview.tsx`.
   - Pass `account.id` directly into `refreshInsights()` in `App.tsx` to eliminate the stale `activeAccountId` closure.
   - Isolate `googleAuth.ts` `tokenClient` callbacks per `contractorId`, move token verification off URL query strings, and remove `setMockGoogleAuth` from production bundles.
   - Sync `SettingsModal` and `GoogleDriveBackupSection` state whenever `account?.id` changes.
-- [ ] **Harden CSV Export (`reportExporter.ts`):** Escape double-quotes, prefix formula-injection characters (`=`, `+`, `-`, `@`), add UTF-8 BOM (`\uFEFF`), and export via `Blob` instead of `encodeURI('data:...')`.
+- [x] **Harden CSV Export (`reportExporter.ts`):** Escape double-quotes, prefix formula-injection characters (`=`, `+`, `-`, `@`), add UTF-8 BOM (`\uFEFF`), and export via `Blob` instead of `encodeURI('data:...')`.
 
-### Subphase 1.2 — Financial, Labour, Material & Machinery Math Integrity
-- [ ] **Atomic Labour Edit Sync (`EditLabourModal.tsx`):** Update `record.entries` alongside `db.labourRecords` and `db.labourEntries` inside a single `db.transaction('rw', ...)`.
-- [ ] **Fix Default Labour Payment Status (`AddLabourModal.tsx`):** Initialize `paymentStatus: 'paid'` on new rows, fix the Advance input so clearing to `0` does not unmount the field, exclude `absent` workers from `totalWorkers`, and add `'Plasterer'` to Edit/OCR role dropdowns.
-- [ ] **Unify Overtime (`1.5x`) & Shift Math (`SiteDetailsModal.tsx`, `LabourDateDetailModal.tsx`, `PhotoOcrModal.tsx`, `reportExporter.ts`):** Compute and display `1.5x` for `overtime`, `0.5x` for `half_day`, and `0` for `absent` consistently across all summaries and PDFs.
-- [ ] **Fix Hindi OCR & Wage Parsing (`ocrProcessor.ts`):** Replace ASCII `\b` boundaries with Unicode-aware boundaries for Devanagari (`\u0900-\u097F`), remove the `!/mason|helper/i` block on `absent`, and prevent year numbers (e.g., `2026`) from being parsed as daily wages.
-- [ ] **Fix Material ↔ ExpenseDue Sync (`AddMaterialModal.tsx`, `EditMaterialModal.tsx`, `database.ts`):**
+### Subphase 1.2 — Financial, Labour, Material & Machinery Math Integrity [COMPLETED]
+- [x] **Atomic Labour Edit Sync (`EditLabourModal.tsx`):** Update `record.entries` alongside `db.labourRecords` and `db.labourEntries` inside a single `db.transaction('rw', ...)`.
+- [x] **Fix Default Labour Payment Status (`AddLabourModal.tsx`):** Initialize `paymentStatus: 'paid'` on new rows, fix the Advance input so clearing to `0` does not unmount the field, exclude `absent` workers from `totalWorkers`, and add `'Plasterer'` to Edit/OCR role dropdowns.
+- [x] **Unify Overtime (`1.5x`) & Shift Math (`SiteDetailsModal.tsx`, `LabourDateDetailModal.tsx`, `PhotoOcrModal.tsx`, `reportExporter.ts`):** Compute and display `1.5x` for `overtime`, `0.5x` for `half_day`, and `0` for `absent` consistently across all summaries and PDFs.
+- [x] **Fix Hindi OCR & Wage Parsing (`ocrProcessor.ts`):** Replace ASCII `\b` boundaries with Unicode-aware boundaries for Devanagari (`\u0900-\u097F`), remove the `!/mason|helper/i` block on `absent`, and prevent year numbers (e.g., `2026`) from being parsed as daily wages.
+- [x] **Fix Material ↔ ExpenseDue Sync (`AddMaterialModal.tsx`, `EditMaterialModal.tsx`, `database.ts`):**
   - Add the missing `paidAmount` input field when `Partial` payment is selected.
   - Link auto-generated `ExpenseDue` records via `materialId` so editing/deleting a material updates/removes its due, and settling a due updates the material's `paymentStatus` and `paidAmount`.
   - Include standalone `ExpenseDue` items in `getSiteFinanceSummary().totalExpense` and clamp negative balances.
-- [ ] **Fix Dashboard KPIs, Client Dues & Tools/Machinery (`DashboardOverview.tsx`, `SiteCard.tsx`, `RecordClientPaymentModal.tsx`, `EditMachineryModal.tsx`):**
+- [x] **Fix Dashboard KPIs, Client Dues & Tools/Machinery (`DashboardOverview.tsx`, `SiteCard.tsx`, `RecordClientPaymentModal.tsx`, `EditMachineryModal.tsx`):**
   - Compute "Workers Today" and "Daily Wages" strictly from today's local-date records across all active sites.
   - Compute `totalClientDue` per site (`sum(max(0, budget - received))`) instead of globally.
   - Make `+₹10k` / `+₹50k` payment chips additive (or rename cleanly), convert `SiteCard` to `useLiveQuery`, render negative profit in red, include Labour & Machinery tables in `exportSiteReportPdf`, fix `EditMachineryModal` stripping `[Self-Owned]`, and fix IST UTC-midnight overdue tool checks.
 
-### Subphase 1.3 — Mobile UX, Hindi Devanagari PDFs, Android APK & PWA
-- [ ] **Fix Unusable Mobile Date Inputs (`AddSiteModal.tsx`, `EditSiteModal.tsx`, `RecordClientPaymentModal.tsx`, `dateUtils.ts`):** Replace `inputMode="numeric"` text inputs with native date pickers (`<input type="date">`) or masked inputs, and use local-timezone date formatting everywhere.
-- [ ] **True Hindi/Devanagari PDFs (`reportExporter.ts`, `index.html`):** Embed `Noto Sans Devanagari` TTF into jsPDF and load `Hind` / `Noto Sans Devanagari` cleanly so Hindi site, worker, and material names render accurately in PDFs.
-- [ ] **Fix Android Build & Native Exports (`android/`, `package.json`, `capacitor.config.ts`):**
+### Subphase 1.3 — Mobile UX, Hindi Devanagari PDFs, Android APK & PWA [COMPLETED]
+- [x] **Fix Unusable Mobile Date Inputs (`AddSiteModal.tsx`, `EditSiteModal.tsx`, `RecordClientPaymentModal.tsx`, `dateUtils.ts`):** Replace `inputMode="numeric"` text inputs with native date pickers (`<input type="date">`) or masked inputs, and use local-timezone date formatting everywhere.
+- [x] **True Hindi/Devanagari PDFs (`reportExporter.ts`, `index.html`):** Embed `Noto Sans Devanagari` TTF into jsPDF and load `Hind` / `Noto Sans Devanagari` cleanly so Hindi site, worker, and material names render accurately in PDFs.
+- [x] **Fix Android Build & Native Exports (`android/`, `package.json`, `capacitor.config.ts`):**
   - Add missing `colors.xml` in `android/app/src/main/res/values/`, add `CAMERA`, `RECORD_AUDIO`, `ACCESS_NETWORK_STATE`, and `USE_BIOMETRIC` permissions, set `android:allowBackup="false"`, and disable `cleartext` / `allowMixedContent` for production.
   - Install `@capacitor/filesystem`, `@capacitor/share`, `@capacitor/app`, `@capacitor/camera`, `@capacitor/geolocation`, and `@capacitor/network` so PDF/CSV/JSON exports and hardware back-button work natively on Android.
   - Replace Windows-only `gradlew.bat` in `package.json` with a cross-platform script.
-- [ ] **Enable True Web Offline (PWA) & Media Compression:** Add `vite-plugin-pwa` (`manifest.webmanifest` + Service Worker) and client-side image compression (max 1280px, ≤ 200 KB WebP/JPEG) before storing in IndexedDB.
-- [ ] **1-Tap WhatsApp Sharing (Tier 1 — Zero Cost):** Add `wa.me` formatted text + `@capacitor/share` PDF attachment buttons on Client Receipts, Pending Dues, and Daily Summaries.
-- [ ] **Performance & UI Polish:** Remove the 60fps `Interactive3DCharacter` `setState` loop, fix `ToastNotification` timer resets, persist Trade & Language changes to `db.account`, and translate remaining hardcoded English strings in Hindi mode.
+- [x] **Enable True Web Offline (PWA) & Media Compression:** Add `vite-plugin-pwa` (`manifest.webmanifest` + Service Worker) and client-side image compression (max 1280px, ≤ 200 KB WebP/JPEG) before storing in IndexedDB.
+- [x] **1-Tap WhatsApp Sharing (Tier 1 — Zero Cost):** Add `wa.me` formatted text + `@capacitor/share` PDF attachment buttons on Client Receipts, Pending Dues, and Daily Summaries.
+- [x] **Performance & UI Polish:** Remove the 60fps `Interactive3DCharacter` `setState` loop, fix `ToastNotification` timer resets, persist Trade & Language changes to `db.account`, and translate remaining hardcoded English strings in Hindi mode.
 
-### Subphase 1.4 — Navigation Cleanup, Tests & CI
-- [ ] **Restore Unreachable Modules:** Wire `QuickAddModal` to `BottomNav`, mount `SmartInsightsCard` on `DashboardOverview`, dynamically generate `RemindersModal` alerts from overdue tools/dues, and wire `ReportsExporter` + `PendingDuesTracker` + `ToolTracker` cleanly.
-- [ ] **Automated Test Suite & CI:** Add `vitest` + `fake-indexeddb`, replace mock-only tests in `criticalDataSafety.test.ts` with real component/DB tests, add unit tests for `getSiteFinanceSummary`, `deleteSite`, `ocrProcessor`, `dateUtils`, and `reportExporter`, and add `.github/workflows/ci.yml` (`tsc`, `oxlint`, `vitest`, `vite build`).
+### Subphase 1.4 — Navigation Cleanup, Tests & CI [COMPLETED]
+- [x] **Restore Unreachable Modules:** Wire `QuickAddModal` to `BottomNav`, mount `SmartInsightsCard` on `DashboardOverview`, dynamically generate `RemindersModal` alerts from overdue tools/dues, and wire `ReportsExporter` + `PendingDuesTracker` + `ToolTracker` cleanly.
+- [x] **Automated Test Suite & CI:** Add `vitest` + `fake-indexeddb`, replace mock-only tests in `criticalDataSafety.test.ts` with real component/DB tests, add unit tests for `getSiteFinanceSummary`, `deleteSite`, `ocrProcessor`, `dateUtils`, and `reportExporter`, and add `.github/workflows/ci.yml` (`tsc`, `oxlint`, `vitest`, `vite build`).
 
 ---
 

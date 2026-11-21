@@ -6,6 +6,7 @@ import { db } from '../../core/db/database';
 import { ActiveTab } from '../common/BottomNav';
 import { CountUpNumber } from '../common/CountUpNumber';
 import { ExploreBanner } from '../discovery/ExploreBanner';
+import { SmartInsightsCard } from '../insights/SmartInsightsCard';
 import {
   Building2,
   Users,
@@ -39,6 +40,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   tools,
   labourRecords,
   dues,
+  insights,
   onSelectSite,
   onOpenAddSite,
   onOpenVoiceModal,
@@ -53,6 +55,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const ongoingSites = sites.filter((s) => s.workStatus === 'ongoing');
   const totalContractBudget = sites.reduce((acc, s) => acc + (s.estimatedBudget || 0), 0);
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   // Ensure all dashboard metrics only count active/valid sites (no orphan sample records)
   const validSiteIds = new Set(sites.map((s) => s.id));
@@ -61,19 +64,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const overdueTools = activeTools.filter(
     (tItem) =>
       (tItem.status === 'overdue' ||
-        (tItem.actualReturnDate === null && new Date(tItem.expectedReturnDate) < new Date())) &&
+        (tItem.actualReturnDate === null && tItem.expectedReturnDate < todayStr)) &&
       !tItem.actualReturnDate
   );
 
   const validDues = sites.length > 0 ? dues.filter((d) => validSiteIds.has(d.siteId)) : [];
   const unpaidDues = validDues.filter((d) => d.status !== 'paid');
-  const totalDuesAmount = unpaidDues.reduce((acc, d) => acc + (d.amountDue - (d.amountPaid || 0)), 0);
+  const totalDuesAmount = unpaidDues.reduce((acc, d) => acc + Math.max(0, d.amountDue - (d.amountPaid || 0)), 0);
 
-  // Today's total workers & latest labour entries
+  // Today's total workers & wages strictly from today's local date
   const validLabourRecords = sites.length > 0 ? labourRecords.filter((l) => validSiteIds.has(l.siteId)) : [];
-  const latestLabourRecord = validLabourRecords[0];
-  const todayWorkerCount = latestLabourRecord?.totalWorkers || 0;
-  const totalLabourWages = validLabourRecords.reduce((acc, l) => acc + (l.totalDailyWage || 0), 0);
+  const todayLabourRecords = validLabourRecords.filter((l) => l.date === todayStr);
+  const todayWorkerCount = todayLabourRecords.reduce((acc, l) => acc + (l.totalWorkers || 0), 0);
+  const todayLabourWages = todayLabourRecords.reduce((acc, l) => acc + (l.totalDailyWage || 0), 0);
 
   // Real-time client payments query across all valid sites
   const allClientPayments = useLiveQuery(() => db.clientPayments.toArray()) || [];
@@ -81,7 +84,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const totalContract = sites.reduce((acc, s) => acc + (s.estimatedBudget || 0), 0);
   const totalReceived = validClientPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
-  const totalClientDue = Math.max(0, totalContract - totalReceived);
+
+  // Compute totalClientDue per site: sum(max(0, budget - received))
+  const siteReceivedMap = new Map<string, number>();
+  for (const p of validClientPayments) {
+    siteReceivedMap.set(p.siteId, (siteReceivedMap.get(p.siteId) || 0) + (p.amount || 0));
+  }
+  const totalClientDue = sites.reduce((acc, s) => {
+    const received = siteReceivedMap.get(s.id) || 0;
+    return acc + Math.max(0, (s.estimatedBudget || 0) - received);
+  }, 0);
   const collectionProgress = totalContract > 0 ? Math.min(100, Math.round((totalReceived / totalContract) * 100)) : 0;
 
 
@@ -95,6 +107,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         onOpenOcrModal={onOpenOcrModal}
         onOpenAddSite={onOpenAddSite}
       />
+
+      {/* Smart Operational Alerts & Insights */}
+      {insights && insights.length > 0 && (
+        <SmartInsightsCard
+          insights={insights}
+          onNavigateTab={onNavigateTab}
+        />
+      )}
 
       {/* 2. Mobile 2x2 KPI Widgets */}
       <div className="grid grid-cols-2 gap-2.5">
@@ -146,7 +166,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </span>
             </div>
             <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate font-medium">
-              ₹{totalLabourWages.toLocaleString('en-IN')} Daily
+              ₹{todayLabourWages.toLocaleString('en-IN')} Daily
             </span>
           </div>
         </div>
@@ -216,8 +236,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </span>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {language === 'hi'
-                ? `सभी ${sites.length} साइट्स • ${allClientPayments.length} कुल रसीदें`
-                : `Across ${sites.length} sites • ${allClientPayments.length} total receipts`}
+                ? `सभी ${sites.length} साइट्स • ${validClientPayments.length} कुल रसीदें`
+                : `Across ${sites.length} sites • ${validClientPayments.length} total receipts`}
             </p>
           </div>
 

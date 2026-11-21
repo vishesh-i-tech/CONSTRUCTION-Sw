@@ -366,9 +366,15 @@ export const App: React.FC = () => {
     };
   }, [currentAccount?.id, currentAccount?.isPinLockEnabled, currentAccount?.pinLock, isAppLocked]);
 
-  const refreshInsights = async () => {
-    const smartIns = await db.generateSmartInsights(activeAccountId || undefined);
-    setInsights(smartIns);
+  const refreshInsights = async (accountId?: string) => {
+    try {
+      const targetContractor = accountId || activeAccountId || undefined;
+      const smartIns = await db.generateSmartInsights(targetContractor);
+      setInsights(smartIns);
+      await db.syncDynamicReminders(targetContractor);
+    } catch (err) {
+      console.warn('Failed to refresh smart insights and reminders:', err);
+    }
   };
 
   const handleAuthenticated = (account: ContractorAccount, isNewAccount: boolean) => {
@@ -384,11 +390,11 @@ export const App: React.FC = () => {
     if (isNewAccount) {
       setIsOnboardingModalOpen(true);
     }
-    refreshInsights();
+    refreshInsights(account.id);
   };
 
   const handleLogOut = () => {
-    clearGoogleAuthSession();
+    clearGoogleAuthSession(activeAccountId || undefined);
     localStorage.removeItem('sitesaathi_active_user_id');
     sessionStorage.removeItem('sitesaathi_unlocked');
     setActiveAccountId(null);
@@ -404,13 +410,17 @@ export const App: React.FC = () => {
 
   const handleLoadSampleData = async () => {
     await db.seedDemoData(activeAccountId || 'contractor-demo');
-    refreshInsights();
+    refreshInsights(activeAccountId || undefined);
     showToast('Sample reviewer data loaded successfully');
   };
 
   const handleClearAllData = async () => {
-    clearGoogleAuthSession();
-    await db.clearAllData();
+    clearGoogleAuthSession(activeAccountId || undefined);
+    if (activeAccountId) {
+      await db.clearAllData(activeAccountId);
+    } else {
+      await db.clearAllData();
+    }
     localStorage.removeItem('sitesaathi_active_user_id');
     sessionStorage.removeItem('sitesaathi_unlocked');
     setActiveAccountId(null);
@@ -464,7 +474,9 @@ export const App: React.FC = () => {
     const sMaterials = materials.filter((m) => m.siteId === site.id);
     const sDues = dues.filter((d) => d.siteId === site.id);
     const sClientPayments = await db.clientPayments.where('siteId').equals(site.id).toArray();
-    exportSiteReportPdf(site, finance, sTools, sMaterials, sDues, sClientPayments, currentAccount?.companyName);
+    const sLabour = labourRecords.filter((l) => l.siteId === site.id);
+    const sMachinery = machinery.filter((m) => m.siteId === site.id);
+    exportSiteReportPdf(site, finance, sTools, sMaterials, sDues, sClientPayments, currentAccount?.companyName, sLabour, sMachinery);
     showToast(`Exported statement for ${site.name}`);
   };
 
@@ -923,6 +935,8 @@ export const App: React.FC = () => {
         isOpen={!!deletingItem}
         onClose={() => setDeletingItem(null)}
         onConfirm={handleConfirmDelete}
+        account={currentAccount}
+        isAntiDeleteEnabled={currentAccount?.isAntiDeleteEnabled}
         title={
           language === 'hi'
             ? `${deletingItem?.name || 'आइटम'} को हटाने की पुष्टि`

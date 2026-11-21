@@ -133,7 +133,7 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
     if (pin.length < 6) {
       const newPin = pin + digit;
       setPin(newPin);
-      if (newPin.length >= 4) {
+      if (newPin.length === 6) {
         verifyPinValue(newPin);
       }
     }
@@ -183,9 +183,9 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           {account.language === 'hi' ? 'सुरक्षा पिन दर्ज करें' : 'Enter Security PIN to Unlock'}
         </p>
 
-        {/* PIN Dots Display */}
-        <div className="flex justify-center items-center gap-3 py-1">
-          {[0, 1, 2, 3].map((idx) => (
+        {/* PIN Dots Display (Supports 4 to 6 digits) */}
+        <div className="flex justify-center items-center gap-2.5 py-1">
+          {[0, 1, 2, 3, 4, 5].map((idx) => (
             <div
               key={idx}
               className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-all duration-200 border-2 ${
@@ -268,6 +268,27 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           className="h-12 sm:h-14 rounded-2xl bg-slate-900/40 hover:bg-slate-800 border border-slate-800/40 text-xs font-semibold text-slate-400 flex items-center justify-center active:scale-95 disabled:opacity-50"
         >
           ⌫
+        </button>
+      </div>
+
+      {/* Submit / Unlock Button for 4-6 digit PINs */}
+      <div className="w-full max-w-xs pt-1 pb-1">
+        <button
+          type="button"
+          disabled={pin.length < 4 || lockoutTimer > 0 || isVerifying}
+          onClick={() => verifyPinValue(pin)}
+          className="w-full py-2.5 sm:py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm font-black text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+        >
+          <Lock className="w-4 h-4" />
+          <span>
+            {isVerifying
+              ? account.language === 'hi'
+                ? 'सत्यापित हो रहा है...'
+                : 'Verifying...'
+              : account.language === 'hi'
+              ? 'अनलॉक करें'
+              : 'Unlock App'}
+          </span>
         </button>
       </div>
 

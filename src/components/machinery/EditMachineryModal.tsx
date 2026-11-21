@@ -59,7 +59,7 @@ export const EditMachineryModal: React.FC<EditMachineryModalProps> = ({
       setRentalHours(machinery.rentalHoursOrDays || 0);
       setRentalCost(machinery.rentalCost || 0);
       setLogDate(machinery.logDate);
-      setNotes(machinery.notes || '');
+      setNotes((machinery.notes || '').replace(/\[Self-Owned\]/g, '').trim());
     }
   }, [machinery]);
 
@@ -75,6 +75,11 @@ export const EditMachineryModal: React.FC<EditMachineryModalProps> = ({
     setIsSubmitting(true);
     try {
       const finalMachine = machineType === 'Other' && customMachine.trim() ? (customMachine.trim() as any) : machineType;
+      const cleanNotes = notes.replace(/\[Self-Owned\]/g, '').trim();
+      const finalNotes = cleanNotes
+        ? `${ownership === 'owned' ? '[Self-Owned] ' : ''}${cleanNotes}`
+        : (ownership === 'owned' ? '[Self-Owned]' : undefined);
+
       await db.machinery.update(machinery.id, {
         siteId,
         machineType: finalMachine,
@@ -84,9 +89,7 @@ export const EditMachineryModal: React.FC<EditMachineryModalProps> = ({
         rentalCost: effectiveRentalCost,
         totalCost,
         logDate,
-        notes: notes.trim()
-          ? `${ownership === 'owned' && !notes.includes('[Self-Owned]') ? '[Self-Owned] ' : ''}${notes.replace('[Self-Owned]', '').trim()}`
-          : (ownership === 'owned' ? '[Self-Owned]' : undefined),
+        notes: finalNotes,
       });
 
       onMachineryUpdated();

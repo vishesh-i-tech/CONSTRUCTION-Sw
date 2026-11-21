@@ -54,7 +54,9 @@ export const EditSiteModal: React.FC<EditSiteModalProps> = ({
 
   const loadSavedContacts = async () => {
     try {
-      const allSites = await db.sites.toArray();
+      const allSites = site?.contractorId
+        ? await db.sites.where('contractorId').equals(site.contractorId).toArray()
+        : await db.sites.toArray();
       const map = new Map<string, string>();
       allSites.forEach((s) => {
         if (s.clientPhone && s.clientPhone.trim()) {
@@ -111,8 +113,8 @@ export const EditSiteModal: React.FC<EditSiteModalProps> = ({
       setBudget(site.estimatedBudget);
       setWorkStatus(site.workStatus);
       setPaymentStatus(site.paymentStatus);
-      setStartDate(toDisplayDate(site.startDate));
-      setExpectedEndDate(site.expectedEndDate ? toDisplayDate(site.expectedEndDate) : '');
+      setStartDate(toIsoDate(site.startDate));
+      setExpectedEndDate(site.expectedEndDate ? toIsoDate(site.expectedEndDate) : '');
       setNotes(site.notes || '');
     }
   }, [site]);
@@ -390,40 +392,31 @@ export const EditSiteModal: React.FC<EditSiteModalProps> = ({
             </div>
           </div>
 
-          {/* Dates - Manual Text Input */}
+          {/* Dates - Native Date Picker */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{language === 'hi' ? 'शुरू होने की तारीख' : 'Start Date'}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">DD-MM-YYYY</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>{language === 'hi' ? 'शुरू होने की तारीख *' : 'Start Date *'}</span>
               </label>
               <input
-                type="text"
-                inputMode="numeric"
+                type="date"
+                required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                placeholder="DD-MM-YYYY"
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{language === 'hi' ? 'पूर्णता तारीख' : 'Target Completion'}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">DD-MM-YYYY</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>{language === 'hi' ? 'पूर्णता तारीख' : 'Target Completion'}</span>
               </label>
               <input
-                type="text"
-                inputMode="numeric"
+                type="date"
                 value={expectedEndDate}
                 onChange={(e) => setExpectedEndDate(e.target.value)}
-                placeholder="DD-MM-YYYY"
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
               />
             </div>

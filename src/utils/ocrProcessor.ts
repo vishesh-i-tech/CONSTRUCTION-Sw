@@ -88,20 +88,20 @@ export const validateRegisterContent = (
 
   // 1. Attendance marker tokens (P, A, H, Half, Present, Absent, Hindi muster tokens)
   const hasAttendanceTokens =
-    /\b(present|absent|half|pre|abs|haajri|hajira|muster|roll|attendance|हाजिरी|हाजरी|उपस्थित|अनुपस्थित|आधा|दिन|खाता|मस्टर)\b/i.test(rawText) ||
-    /(?:^|\s)[PAHpah](?:$|\s|[0-9\.\-\/])/m.test(rawText);
+    /(?:^|[\s,.\-।])(?:present|absent|half|pre|abs|haajri|hajira|muster|roll|attendance|हाजिरी|हाजरी|उपस्थित|अनुपस्थित|आधा|दिन|खाता|मस्टर|overtime|ओटी)(?:$|[\s,.\-।])/i.test(rawText) ||
+    /(?:^|\s)[PAHpah](?:$|\s|[0-9.\-/])/m.test(rawText);
 
   // 2. Trade role tokens (Mason, Helper, Mistry, Carpenter, etc.)
   const hasRoleTokens =
-    /\b(mason|helper|mistry|mistri|rajmistry|carpenter|plumber|electrician|painter|supervisor|welder|मिस्त्री|हेल्पर|राजमिस्त्री|बढ़ई|कारीगर|मजदूर|लेबर|बेलदार)\b/i.test(
+    /(?:^|[\s,.\-।])(?:mason|helper|mistry|mistri|rajmistry|carpenter|plumber|electrician|painter|supervisor|welder|plasterer|मिस्त्री|हेल्पर|राजमिस्त्री|बढ़ई|कारीगर|मजदूर|लेबर|बेलदार|प्लास्टर|वेल्डर|सुपरवाइजर)(?:$|[\s,.\-।])/i.test(
       rawText
     );
 
   // 3. Realistic daily wage numbers (₹200 to ₹3000)
-  const hasWageTokens = /\b([2-9]\d{2}|[1-2]\d{3})\b/.test(rawText);
+  const hasWageTokens = /\b([2-9]\d{2}|[1-2]\d{3})\b/.test(rawText.replace(/\b(?:202[0-9]|203[0-5])\b/g, ''));
 
   // 4. Tabular or numbered list structure (1., 2), 3 -, etc.)
-  const hasNumberedRows = /(?:^|\n)\s*(?:\d{1,2}[\.\-\)]|[#\*\-•])\s+/m.test(rawText);
+  const hasNumberedRows = /(?:^|\n)\s*(?:\d{1,2}[.\-)]|[#*\-•])\s+/m.test(rawText);
 
   // Conservative heuristic evaluation:
   // Requires at least 2 independent signals, or at least 2 parsed rows with at least 1 domain token.
@@ -155,18 +155,23 @@ export const parseOcrTextToLabourEntries = (rawText: string, recordId: string): 
 
   lines.forEach((line, index) => {
     // Strip leading serial numbers (e.g., "1.", "02 -", "3)")
-    const cleaned = line.replace(/^[0-9]+[\.\-\)\s]+/, '').trim();
+    const cleaned = line.replace(/^[0-9]+[.\-)\s]+/, '').trim();
     if (cleaned.length < 2) return;
+
+    // Strip dates and 4-digit years (e.g. 2020-2035) so dates are not parsed as wages
+    const withoutDates = cleaned
+      .replace(/\b\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\b/g, '')
+      .replace(/\b(?:202[0-9]|203[0-5])\b/g, '');
 
     // Check for domain muster tokens to prevent turning random text lines into worker rows
     const hasStatusToken =
-      /\b(?:half|आधा|0\.5|absent|अनुपस्थित|abs|present|उपस्थित)\b/i.test(cleaned) ||
-      /(?:^|\s)[PAHpah](?:$|\s|[0-9\.\-\/])/m.test(cleaned);
+      /(?:^|[\s,.\-।])(?:half|आधा|0\.5|absent|अनुपस्थित|abs|present|उपस्थित|overtime|ओटी)(?:$|[\s,.\-।])/i.test(cleaned) ||
+      /(?:^|\s)[PAHpah](?:$|\s|[0-9.\-/])/m.test(cleaned);
     const hasRoleToken =
-      /mason|मिस्त्री|राज|mistry|mistri|helper|हेल्पर|electric|तार|बिजली|plumb|पाइप|नल|carpenter|बढ़ई|लकड़ी|painter|पेंट/i.test(
+      /mason|मिस्त्री|राज|mistry|mistri|helper|हेल्पर|electric|तार|बिजली|plumb|पाइप|नल|carpenter|बढ़ई|लकड़ी|painter|पेंट|plaster|प्लास्टर|welder|वेल्डर|supervisor/i.test(
         cleaned
       );
-    const wageMatches = cleaned.match(/\b([2-9]\d{2}|[1-2]\d{3})\b/);
+    const wageMatches = withoutDates.match(/\b([2-9]\d{2}|[1-2]\d{3})\b/);
     const hasWageToken = !!wageMatches;
 
     // If the line has no attendance status, no role, and no realistic wage number,
@@ -177,11 +182,13 @@ export const parseOcrTextToLabourEntries = (rawText: string, recordId: string): 
 
     // Detect attendance status
     let attendanceStatus: LabourEntry['attendanceStatus'] = 'full_day';
-    if (/\b(?:half|आधा|0\.5)\b|\bH\b/i.test(cleaned)) {
+    if (/(?:^|[\s,.\-।])(?:overtime|ओटी|ot)(?:$|[\s,.\-।])/i.test(cleaned)) {
+      attendanceStatus = 'overtime';
+    } else if (/(?:^|[\s,.\-।])(?:half|आधा|0\.5)(?:$|[\s,.\-।])/i.test(cleaned) || /\bH\b/i.test(cleaned)) {
       attendanceStatus = 'half_day';
     } else if (
-      /\b(?:absent|अनुपस्थित|abs)\b|\bA\b/i.test(cleaned) &&
-      !/mason|helper/i.test(cleaned)
+      /(?:^|[\s,.\-।])(?:absent|अनुपस्थित|abs)(?:$|[\s,.\-।])/i.test(cleaned) ||
+      /(?:^|\s)[Aa](?:$|\s|[0-9.\-/])/m.test(cleaned)
     ) {
       attendanceStatus = 'absent';
     } else {
@@ -191,23 +198,26 @@ export const parseOcrTextToLabourEntries = (rawText: string, recordId: string): 
     // Detect Role
     let role: LabourEntry['role'] = 'Helper';
     if (/mason|मिस्त्री|राज|mistry|mistri/i.test(cleaned)) role = 'Mason';
+    else if (/plaster|प्लास्टर/i.test(cleaned)) role = 'Plasterer';
     else if (/electric|तार|बिजली/i.test(cleaned)) role = 'Electrician';
     else if (/plumb|पाइप|नल/i.test(cleaned)) role = 'Plumber';
     else if (/carpenter|बढ़ई|लकड़ी/i.test(cleaned)) role = 'Carpenter';
     else if (/painter|पेंट/i.test(cleaned)) role = 'Painter';
+    else if (/welder|वेल्डर/i.test(cleaned)) role = 'Welder';
+    else if (/supervisor|सुपरवाइजर/i.test(cleaned)) role = 'Supervisor';
 
     // Daily wage: ONLY if explicitly extracted from the line.
     // NEVER silently guess or default to ₹550/₹900. If missing, set to 0 (unverified).
     const dailyWage = wageMatches ? parseInt(wageMatches[1], 10) : 0;
 
     // Clean name: remove numbers and recognized role/status keywords with word boundaries
-    let workerName = cleaned
+    let workerName = withoutDates
       .replace(/\b([2-9]\d{2}|[1-2]\d{3})\b/g, '')
       .replace(
-        /\b(?:mason|helper|plumber|electrician|mistry|mistri|full|half|absent|present|[pah])\b/gi,
+        /\b(?:mason|helper|plumber|electrician|mistry|mistri|plasterer|welder|supervisor|full|half|absent|present|overtime|[pah])\b/gi,
         ''
       )
-      .replace(/(?:मिस्त्री|हेल्पर|राजमिस्त्री|बढ़ई|कारीगर|हाजिरी|उपस्थित|अनुपस्थित)/g, '')
+      .replace(/(?:मिस्त्री|हेल्पर|राजमिस्त्री|बढ़ई|कारीगर|हाजिरी|उपस्थित|अनुपस्थित|प्लास्टर|वेल्डर|सुपरवाइजर)/g, '')
       .replace(/[^\w\s\u0900-\u097F]/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
@@ -223,6 +233,7 @@ export const parseOcrTextToLabourEntries = (rawText: string, recordId: string): 
     if (dailyWage > 0) {
       if (attendanceStatus === 'half_day') paidAmount = Math.round(dailyWage * 0.5);
       else if (attendanceStatus === 'absent') paidAmount = 0;
+      else if (attendanceStatus === 'overtime') paidAmount = Math.round(dailyWage * 1.5);
       else paidAmount = dailyWage;
     }
 

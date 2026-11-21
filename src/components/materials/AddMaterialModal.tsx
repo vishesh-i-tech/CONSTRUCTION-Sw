@@ -108,6 +108,7 @@ export const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         await db.dues.put({
           id: `due-${Date.now()}`,
           siteId,
+          materialId: newMaterial.id,
           title: `Material Due: ${newMaterial.itemName}`,
           category: 'material',
           amountDue: balanceDue,
@@ -293,7 +294,7 @@ export const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             </div>
           </div>
 
-          {/* Payment Status */}
+          {/* Payment Status & Paid Amount */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -310,9 +311,41 @@ export const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
               </select>
             </div>
 
+            {paymentStatus === 'partial' ? (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {language === 'hi' ? 'दिया गया भुगतान (₹) *' : 'Paid Amount (₹) *'}
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  max={totalCost}
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {language === 'hi' ? 'तारीख' : 'Purchase Date'}
+                </label>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {paymentStatus === 'partial' && (
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'hi' ? 'तारीख' : 'Purchase Date'}
+                {language === 'hi' ? 'खरीद तारीख' : 'Purchase Date'}
               </label>
               <input
                 type="date"
@@ -321,7 +354,7 @@ export const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
               />
             </div>
-          </div>
+          )}
 
           {/* Notes */}
           <div>

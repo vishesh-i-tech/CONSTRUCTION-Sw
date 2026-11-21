@@ -145,6 +145,7 @@ export interface ExpenseDue {
   id: string;
   siteId: string;
   vendorId?: string;
+  materialId?: string;
   title: string;
   category: 'material' | 'tool_rent' | 'machinery' | 'labour' | 'subcontract' | 'other';
   amountDue: number;

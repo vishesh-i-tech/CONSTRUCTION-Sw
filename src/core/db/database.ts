@@ -74,6 +74,9 @@ export class SiteSaathiDatabase extends Dexie {
     this.version(3).stores({
       clientPayments: 'id, siteId, paymentDate, paymentMode',
     });
+    this.version(4).stores({
+      dues: 'id, siteId, vendorId, materialId, status, dueDate',
+    });
   }
 
   // Purge pre-seeded demo records and orphan records so user has a 100% clean slate
@@ -170,10 +173,15 @@ export class SiteSaathiDatabase extends Dexie {
         this.clientPayments,
       ],
       async () => {
-        // Clear previous and load clean sample data
-        await this.clearAllData();
+        // Clear previous data scoped strictly to this contractorId
+        await this.clearAllData(contractorId);
 
-        await this.account.bulkPut(SEED_ACCOUNTS);
+        const demoAccount = SEED_ACCOUNTS.find((a) => a.id === contractorId) || {
+          ...SEED_ACCOUNTS[0],
+          id: contractorId,
+        };
+        await this.account.put(demoAccount);
+
         const customSites = SEED_SITES.map((s) => ({ ...s, contractorId }));
         const customVendors = SEED_VENDORS.map((v) => ({ ...v, contractorId }));
 
@@ -191,8 +199,8 @@ export class SiteSaathiDatabase extends Dexie {
     );
   }
 
-  // Wipe all tables clean (brand-new state)
-  async clearAllData() {
+  // Wipe data clean: if contractorId is provided, strictly scopes wipe to that contractor
+  async clearAllData(contractorId?: string) {
     await this.transaction(
       'rw',
       [
@@ -209,17 +217,37 @@ export class SiteSaathiDatabase extends Dexie {
         this.clientPayments,
       ],
       async () => {
-        await this.account.clear();
-        await this.sites.clear();
-        await this.tools.clear();
-        await this.labourRecords.clear();
-        await this.labourEntries.clear();
-        await this.materials.clear();
-        await this.machinery.clear();
-        await this.dues.clear();
-        await this.vendors.clear();
-        await this.reminders.clear();
-        await this.clientPayments.clear();
+        if (contractorId) {
+          const sites = await this.sites.where('contractorId').equals(contractorId).toArray();
+          for (const s of sites) {
+            const labourRecs = await this.labourRecords.where('siteId').equals(s.id).toArray();
+            for (const lr of labourRecs) {
+              await this.labourEntries.where('recordId').equals(lr.id).delete();
+            }
+            await this.labourRecords.where('siteId').equals(s.id).delete();
+            await this.tools.where('siteId').equals(s.id).delete();
+            await this.materials.where('siteId').equals(s.id).delete();
+            await this.machinery.where('siteId').equals(s.id).delete();
+            await this.dues.where('siteId').equals(s.id).delete();
+            await this.reminders.where('siteId').equals(s.id).delete();
+            await this.clientPayments.where('siteId').equals(s.id).delete();
+            await this.sites.delete(s.id);
+          }
+          await this.vendors.where('contractorId').equals(contractorId).delete();
+          await this.account.delete(contractorId);
+        } else {
+          await this.account.clear();
+          await this.sites.clear();
+          await this.tools.clear();
+          await this.labourRecords.clear();
+          await this.labourEntries.clear();
+          await this.materials.clear();
+          await this.machinery.clear();
+          await this.dues.clear();
+          await this.vendors.clear();
+          await this.reminders.clear();
+          await this.clientPayments.clear();
+        }
       }
     );
   }
@@ -298,7 +326,13 @@ export class SiteSaathiDatabase extends Dexie {
   }
 
   async deleteMaterial(materialId: string) {
-    await this.materials.delete(materialId);
+    await this.transaction('rw', [this.materials, this.dues], async () => {
+      const linkedDues = await this.dues.where('materialId').equals(materialId).toArray();
+      for (const due of linkedDues) {
+        await this.dues.delete(due.id);
+      }
+      await this.materials.delete(materialId);
+    });
   }
 
   async deleteMachinery(machineryId: string) {
@@ -314,6 +348,31 @@ export class SiteSaathiDatabase extends Dexie {
 
   async deleteDue(dueId: string) {
     await this.dues.delete(dueId);
+  }
+
+  // Settle or partially pay an Expense Due, keeping linked Material record in sync
+  async settleDue(dueId: string, amount?: number) {
+    await this.transaction('rw', [this.dues, this.materials], async () => {
+      const due = await this.dues.get(dueId);
+      if (!due) return;
+      const settleAmount = amount !== undefined ? amount : Math.max(0, due.amountDue - (due.amountPaid || 0));
+      const newPaid = (due.amountPaid || 0) + settleAmount;
+      const isFullyPaid = newPaid >= due.amountDue;
+      await this.dues.update(dueId, {
+        amountPaid: newPaid,
+        status: isFullyPaid ? 'paid' : 'pending',
+      });
+      if (due.materialId) {
+        const mat = await this.materials.get(due.materialId);
+        if (mat) {
+          const newMatPaid = (mat.paidAmount || 0) + settleAmount;
+          await this.materials.update(mat.id, {
+            paidAmount: newMatPaid,
+            paymentStatus: newMatPaid >= mat.totalCost ? 'paid' : 'partial',
+          });
+        }
+      }
+    });
   }
 
   // Calculate finance metrics for a single site
@@ -342,12 +401,17 @@ export class SiteSaathiDatabase extends Dexie {
     const labourCost = labourRecords.reduce((acc, l) => acc + (l.totalDailyWage || 0), 0);
     const labourPaid = labourRecords.reduce((acc, l) => acc + (l.totalPaid || 0), 0);
 
-    const totalExpense = materialCost + machineryCost + toolsCost + labourCost;
+    // Standalone dues (e.g. subcontract, miscellaneous expenses that are NOT already counted under materials)
+    const dues = await this.dues.where('siteId').equals(siteId).toArray();
+    const standaloneDuesCost = dues
+      .filter((d) => !d.materialId && d.category !== 'material')
+      .reduce((acc, d) => acc + (d.amountDue || 0), 0);
+
+    const totalExpense = materialCost + machineryCost + toolsCost + labourCost + standaloneDuesCost;
     const estimatedProfit = (site.estimatedBudget || 0) - totalExpense;
     const profitMarginPercent = site.estimatedBudget > 0 ? (estimatedProfit / site.estimatedBudget) * 100 : 0;
 
-    const dues = await this.dues.where('siteId').equals(siteId).toArray();
-    const unpaidDues = dues.filter((d) => d.status !== 'paid').reduce((acc, d) => acc + (d.amountDue - (d.amountPaid || 0)), 0);
+    const unpaidDues = dues.filter((d) => d.status !== 'paid').reduce((acc, d) => acc + Math.max(0, d.amountDue - (d.amountPaid || 0)), 0);
 
     const clientPayments = await this.clientPayments.where('siteId').equals(siteId).toArray();
     const totalClientReceived = clientPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
@@ -386,9 +450,10 @@ export class SiteSaathiDatabase extends Dexie {
     const allTools = (await this.tools.toArray()).filter((t) => siteIds.has(t.siteId));
     const allDues = (await this.dues.toArray()).filter((d) => siteIds.has(d.siteId));
 
-    // 1. Tool Overdue Insights
+    // 1. Tool Overdue Insights (compare against today's local date YYYY-MM-DD to avoid UTC midnight false positives)
+    const todayStr = new Date().toLocaleDateString('en-CA');
     const overdueTools = allTools.filter(
-      (t) => (t.status === 'overdue' || (t.actualReturnDate === null && new Date(t.expectedReturnDate) < new Date())) && !t.actualReturnDate
+      (t) => (t.status === 'overdue' || (t.actualReturnDate === null && t.expectedReturnDate < todayStr)) && !t.actualReturnDate
     );
     if (overdueTools.length > 0) {
       const toolNames = overdueTools.slice(0, 2).map((t) => `${t.name} (${t.quantity})`).join(', ');
@@ -444,6 +509,80 @@ export class SiteSaathiDatabase extends Dexie {
     return insights;
   }
 
+  /**
+   * Automatically synchronizes active reminders from overdue tools, unpaid dues, and completed sites.
+   * Keeps user-dismissed states intact.
+   */
+  async syncDynamicReminders(contractorId?: string): Promise<void> {
+    const allSites = contractorId
+      ? await this.sites.where('contractorId').equals(contractorId).toArray()
+      : await this.sites.toArray();
+
+    if (allSites.length === 0) return;
+
+    const siteIds = new Set(allSites.map((s) => s.id));
+    const siteMap = new Map(allSites.map((s) => [s.id, s.name]));
+    const allTools = (await this.tools.toArray()).filter((t) => siteIds.has(t.siteId));
+    const allDues = (await this.dues.toArray()).filter((d) => siteIds.has(d.siteId));
+
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const existingReminders = await this.reminders.toArray();
+    const existingMap = new Map(existingReminders.map((r) => [r.id, r]));
+
+    const dynamicReminders: Reminder[] = [];
+
+    // 1. Tool Overdue Reminders
+    const overdueTools = allTools.filter(
+      (t) =>
+        (t.status === 'overdue' || (t.actualReturnDate === null && t.expectedReturnDate < todayStr)) &&
+        !t.actualReturnDate
+    );
+    for (const tool of overdueTools) {
+      const remId = `rem-tool-${tool.id}`;
+      const existing = existingMap.get(remId);
+      const targetSiteName = siteMap.get(tool.siteId) || 'Site';
+      dynamicReminders.push({
+        id: remId,
+        type: 'tool_overdue',
+        title: `Tool Overdue: ${tool.name} (Qty: ${tool.quantity})`,
+        description: `${tool.name} at ${targetSiteName} was due on ${tool.expectedReturnDate}.`,
+        siteId: tool.siteId,
+        siteName: targetSiteName,
+        dueDate: tool.expectedReturnDate,
+        isDismissed: existing?.isDismissed || false,
+      });
+    }
+
+    // 2. Completed site pending dues
+    const completedSites = allSites.filter((s) => s.workStatus === 'completed');
+    for (const site of completedSites) {
+      const pendingDuesForSite = allDues.filter((d) => d.siteId === site.id && d.status !== 'paid');
+      const totalPending = pendingDuesForSite.reduce(
+        (sum, d) => sum + Math.max(0, d.amountDue - (d.amountPaid || 0)),
+        0
+      );
+      if (totalPending > 0) {
+        const remId = `rem-site-due-${site.id}`;
+        const existing = existingMap.get(remId);
+        dynamicReminders.push({
+          id: remId,
+          type: 'completed_site_due',
+          title: `Pending Dues: ${site.name}`,
+          description: `Site completed with ₹${totalPending.toLocaleString('en-IN')} pending expense dues to settle.`,
+          siteId: site.id,
+          siteName: site.name,
+          dueDate: site.updatedAt ? site.updatedAt.slice(0, 10) : todayStr,
+          amount: totalPending,
+          isDismissed: existing?.isDismissed || false,
+        });
+      }
+    }
+
+    if (dynamicReminders.length > 0) {
+      await this.reminders.bulkPut(dynamicReminders);
+    }
+  }
+
   // Full Database Backup Export (JSON)
   // Scoped strictly to the specified contractorId to guarantee multi-tenant data isolation.
   // Includes only the target contractor's account, sites, and genuine site/contractor-related records.
@@ -475,8 +614,12 @@ export class SiteSaathiDatabase extends Dexie {
     }
 
     const sanitizedAccount = { ...rawAccount };
+    const trimmedPassphrase = passphrase?.trim();
+    if (trimmedPassphrase && trimmedPassphrase.length < 8) {
+      throw new Error('PASSPHRASE_TOO_SHORT: Encryption passphrase must be at least 8 characters long.');
+    }
     // Strip credentials from unencrypted backup
-    if (!passphrase || passphrase.trim().length === 0) {
+    if (!trimmedPassphrase || trimmedPassphrase.length === 0) {
       delete sanitizedAccount.password;
       delete sanitizedAccount.pinLock;
     }
@@ -545,8 +688,8 @@ export class SiteSaathiDatabase extends Dexie {
     };
 
     const plainJson = JSON.stringify(backup, null, 2);
-    if (passphrase && passphrase.trim().length >= 4) {
-      return await encryptBackupJson(plainJson, passphrase.trim());
+    if (trimmedPassphrase && trimmedPassphrase.length >= 8) {
+      return await encryptBackupJson(plainJson, trimmedPassphrase);
     }
     return plainJson;
   }
@@ -740,16 +883,33 @@ export class SiteSaathiDatabase extends Dexie {
     verifyNoConflictingContractorTag(data.reminders, 'Reminder');
     verifyNoConflictingContractorTag(data.clientPayments, 'Client payment');
 
-    // Step 3: Prepare Scoped Records to Import
-    const accountsToImport = [matchingAccount];
-    for (const acc of accountsToImport) {
-      if (acc.password && !acc.password.startsWith('pbkdf2:v1:')) {
-        acc.password = await hashCredential(acc.password);
-      }
-      if (acc.pinLock && !acc.pinLock.startsWith('pbkdf2:v1:')) {
-        acc.pinLock = await hashCredential(acc.pinLock);
-      }
+    // Step 3: Prepare Scoped Records to Import (Merge with existing account to preserve credentials)
+    const existingAccount = await this.account.get(targetContractorId);
+    const mergedAccount: ContractorAccount = {
+      ...(existingAccount || {}),
+      ...matchingAccount,
+      password: matchingAccount.password || existingAccount?.password,
+      pinLock: matchingAccount.pinLock || existingAccount?.pinLock,
+      isPinLockEnabled:
+        matchingAccount.isPinLockEnabled !== undefined
+          ? matchingAccount.isPinLockEnabled
+          : (existingAccount?.isPinLockEnabled ?? false),
+      isBiometricEnabled:
+        matchingAccount.isBiometricEnabled !== undefined
+          ? matchingAccount.isBiometricEnabled
+          : (existingAccount?.isBiometricEnabled ?? false),
+      isAntiDeleteEnabled:
+        matchingAccount.isAntiDeleteEnabled !== undefined
+          ? matchingAccount.isAntiDeleteEnabled
+          : (existingAccount?.isAntiDeleteEnabled ?? false),
+    };
+    if (mergedAccount.password && !mergedAccount.password.startsWith('pbkdf2:v1:')) {
+      mergedAccount.password = await hashCredential(mergedAccount.password);
     }
+    if (mergedAccount.pinLock && !mergedAccount.pinLock.startsWith('pbkdf2:v1:')) {
+      mergedAccount.pinLock = await hashCredential(mergedAccount.pinLock);
+    }
+    const accountsToImport = [mergedAccount];
 
     const sitesToImport = (data.sites as Site[])
       .filter((s) => s && (s.contractorId === targetContractorId || !s.contractorId))

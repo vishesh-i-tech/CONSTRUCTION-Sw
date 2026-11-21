@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export interface ToastMessage {
@@ -32,6 +32,8 @@ const ToastItem: React.FC<{
 }> = ({ toast, onDismiss }) => {
   const duration = toast.duration || 3500;
   const [progress, setProgress] = useState(100);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
     const startTime = Date.now();
@@ -41,12 +43,12 @@ const ToastItem: React.FC<{
       setProgress(remaining);
       if (remaining <= 0) {
         clearInterval(interval);
-        onDismiss(toast.id);
+        onDismissRef.current(toast.id);
       }
-    }, 20);
+    }, 25);
 
     return () => clearInterval(interval);
-  }, [toast.id, duration, onDismiss]);
+  }, [toast.id, duration]);
 
   const iconMap = {
     success: <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />,

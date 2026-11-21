@@ -4,6 +4,13 @@
  */
 
 /**
+ * Returns today's date formatted as ISO YYYY-MM-DD in local time
+ */
+export const getTodayIso = (): string => {
+  return new Date().toLocaleDateString('en-CA');
+};
+
+/**
  * Returns today's date formatted as DD-MM-YYYY (e.g. "17-10-2026")
  */
 export const getTodayFormatted = (): string => {

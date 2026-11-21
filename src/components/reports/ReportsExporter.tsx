@@ -37,8 +37,10 @@ export const ReportsExporter: React.FC<ReportsExporterProps> = ({
       const sMaterials = materials.filter((m) => m.siteId === site.id);
       const sDues = dues.filter((d) => d.siteId === site.id);
       const sClientPayments = await db.clientPayments.where('siteId').equals(site.id).toArray();
+      const sLabour = await db.labourRecords.where('siteId').equals(site.id).toArray();
+      const sMachinery = await db.machinery.where('siteId').equals(site.id).toArray();
 
-      exportSiteReportPdf(site, finance, sTools, sMaterials, sDues, sClientPayments, 'SiteSaathi Contractor Statement');
+      exportSiteReportPdf(site, finance, sTools, sMaterials, sDues, sClientPayments, 'SiteSaathi Contractor Statement', sLabour, sMachinery);
     } catch (err) {
       console.error('Export PDF error:', err);
     } finally {

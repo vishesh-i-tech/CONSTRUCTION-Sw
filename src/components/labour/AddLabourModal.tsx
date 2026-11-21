@@ -73,6 +73,7 @@ export const AddLabourModal: React.FC<AddLabourModalProps> = ({
       dailyWage: initialWage,
       paidAmount: initialWage,
       balanceDue: 0,
+      paymentStatus: 'paid',
     };
   };
 
@@ -153,9 +154,11 @@ export const AddLabourModal: React.FC<AddLabourModalProps> = ({
       const paid = Math.max(0, Number(val) || 0);
       current.paidAmount = paid;
       current.balanceDue = Math.max(0, earnedWage - paid);
-      if (paid === 0) current.paymentStatus = 'unpaid';
-      else if (paid >= earnedWage && earnedWage > 0) current.paymentStatus = 'paid';
-      else current.paymentStatus = 'advance';
+      if (current.paymentStatus !== 'advance') {
+        if (paid === 0) current.paymentStatus = 'unpaid';
+        else if (paid >= earnedWage && earnedWage > 0) current.paymentStatus = 'paid';
+        else current.paymentStatus = 'advance';
+      }
     } else if (field === 'attendanceStatus' || field === 'dailyWage' || field === 'role') {
       if (current.attendanceStatus === 'absent') {
         current.paidAmount = 0;
@@ -189,6 +192,7 @@ export const AddLabourModal: React.FC<AddLabourModalProps> = ({
         dailyWage: recentWage,
         paidAmount: recentWage,
         balanceDue: 0,
+        paymentStatus: 'paid',
       },
     ]);
   };
@@ -237,12 +241,13 @@ export const AddLabourModal: React.FC<AddLabourModalProps> = ({
     try {
       const recordId = `lr-${Date.now()}`;
       const totalPaid = finalizedEntries.reduce((acc, e) => acc + (e.paidAmount || 0), 0);
+      const activeWorkersCount = finalizedEntries.filter((e) => e.attendanceStatus !== 'absent').length;
 
       const labourRecord: LabourRecord = {
         id: recordId,
         siteId,
         date,
-        totalWorkers: finalizedEntries.length,
+        totalWorkers: activeWorkersCount,
         totalDailyWage,
         totalPaid,
         notes: notes.trim() || undefined,
@@ -252,10 +257,12 @@ export const AddLabourModal: React.FC<AddLabourModalProps> = ({
         })),
       };
 
-      await db.labourRecords.put(labourRecord);
-      for (const entry of labourRecord.entries || []) {
-        await db.labourEntries.put(entry);
-      }
+      await db.transaction('rw', [db.labourRecords, db.labourEntries], async () => {
+        await db.labourRecords.put(labourRecord);
+        for (const entry of labourRecord.entries || []) {
+          await db.labourEntries.put(entry);
+        }
+      });
 
       resetForm();
       onLabourAdded();

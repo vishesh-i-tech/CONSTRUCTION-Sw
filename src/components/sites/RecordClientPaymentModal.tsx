@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
 import { Site, ClientPayment, PaymentMode } from '../../types';
 import { db } from '../../core/db/database';
-import { getTodayFormatted, toIsoDate } from '../../utils/dateUtils';
+import { getTodayFormatted, getTodayIso, toIsoDate } from '../../utils/dateUtils';
 import {
   IndianRupee,
   Calendar,
@@ -33,7 +33,7 @@ export const RecordClientPaymentModal: React.FC<RecordClientPaymentModalProps> =
   const { language, tradeConfig } = useTheme();
 
   const [amount, setAmount] = useState<string>('');
-  const [paymentDate, setPaymentDate] = useState<string>(getTodayFormatted());
+  const [paymentDate, setPaymentDate] = useState<string>(getTodayIso());
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI / Online');
   const [payerName, setPayerName] = useState<string>(site.clientName || '');
   const [referenceNo, setReferenceNo] = useState<string>('');
@@ -43,7 +43,7 @@ export const RecordClientPaymentModal: React.FC<RecordClientPaymentModalProps> =
 
   const resetForm = () => {
     setAmount('');
-    setPaymentDate(getTodayFormatted());
+    setPaymentDate(getTodayIso());
     setPaymentMode('UPI / Online');
     setPayerName(site.clientName || '');
     setReferenceNo('');
@@ -201,7 +201,10 @@ export const RecordClientPaymentModal: React.FC<RecordClientPaymentModalProps> =
                 <button
                   key={preset}
                   type="button"
-                  onClick={() => setAmount(preset.toString())}
+                  onClick={() => {
+                    const current = parseFloat(amount) || 0;
+                    setAmount((current + preset).toString());
+                  }}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   +₹{(preset / 1000).toLocaleString('en-IN')}k
@@ -212,20 +215,15 @@ export const RecordClientPaymentModal: React.FC<RecordClientPaymentModalProps> =
 
           {/* Payment Date */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                <span>{language === 'hi' ? 'भुगतान की तारीख *' : 'Payment Date *'}</span>
-              </label>
-              <span className="text-[10px] text-slate-400 font-normal">DD-MM-YYYY</span>
-            </div>
+            <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+              <span>{language === 'hi' ? 'भुगतान की तारीख *' : 'Payment Date *'}</span>
+            </label>
             <input
-              type="text"
-              inputMode="numeric"
+              type="date"
               required
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
-              placeholder="DD-MM-YYYY"
               className="w-full px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

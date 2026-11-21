@@ -116,9 +116,11 @@ export const EditLabourModal: React.FC<EditLabourModalProps> = ({
       const paid = Math.max(0, Number(val) || 0);
       current.paidAmount = paid;
       current.balanceDue = Math.max(0, earnedWage - paid);
-      if (paid === 0) current.paymentStatus = 'unpaid';
-      else if (paid >= earnedWage && earnedWage > 0) current.paymentStatus = 'paid';
-      else current.paymentStatus = 'advance';
+      if (current.paymentStatus !== 'advance') {
+        if (paid === 0) current.paymentStatus = 'unpaid';
+        else if (paid >= earnedWage && earnedWage > 0) current.paymentStatus = 'paid';
+        else current.paymentStatus = 'advance';
+      }
     } else if (field === 'dailyWage' || field === 'attendanceStatus') {
       if (current.attendanceStatus === 'absent') {
         current.paidAmount = 0;
@@ -184,23 +186,29 @@ export const EditLabourModal: React.FC<EditLabourModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await db.labourRecords.update(record.id, {
-        siteId,
-        date,
-        totalWorkers: entries.length,
-        totalDailyWage: totalWages,
-        totalPaid,
-        notes: notes.trim() || undefined,
-      });
+      const activeWorkersCount = entries.filter((e) => e.attendanceStatus !== 'absent').length;
+      const normalizedEntries = entries.map((entry) => ({
+        ...entry,
+        recordId: record.id,
+      }));
 
-      // Clear existing entries and re-insert updated ones
-      await db.labourEntries.where('recordId').equals(record.id).delete();
-      for (const entry of entries) {
-        await db.labourEntries.put({
-          ...entry,
-          recordId: record.id,
+      await db.transaction('rw', [db.labourRecords, db.labourEntries], async () => {
+        await db.labourRecords.update(record.id, {
+          siteId,
+          date,
+          totalWorkers: activeWorkersCount,
+          totalDailyWage: totalWages,
+          totalPaid,
+          notes: notes.trim() || undefined,
+          entries: normalizedEntries,
         });
-      }
+
+        // Clear existing entries and re-insert updated ones
+        await db.labourEntries.where('recordId').equals(record.id).delete();
+        for (const entry of normalizedEntries) {
+          await db.labourEntries.put(entry);
+        }
+      });
 
       onLabourUpdated();
       onClose();
@@ -352,6 +360,7 @@ export const EditLabourModal: React.FC<EditLabourModalProps> = ({
                         >
                           <option value="Mason">Mason</option>
                           <option value="Helper">Helper</option>
+                          <option value="Plasterer">Plasterer</option>
                           <option value="Carpenter">Carpenter</option>
                           <option value="Electrician">Electrician</option>
                           <option value="Plumber">Plumber</option>

@@ -36,8 +36,8 @@ export const parseSiteVoiceTranscript = (transcript: string): ExtractedSiteData 
   }
 
   // 2. Extract Location
-  const locMatchHi = transcript.match(/(?:लोकेशन|जगह|स्थान|एड्रेस)\s*(?:है|:)?\s*([^,\.]+)/i);
-  const locMatchEn = transcript.match(/(?:location|address|at|in|near)\s*(?:is|:)?\s*([^,\.]+)/i);
+  const locMatchHi = transcript.match(/(?:लोकेशन|जगह|स्थान|एड्रेस)\s*(?:है|:)?\s*([^,.]+)/i);
+  const locMatchEn = transcript.match(/(?:location|address|at|in|near)\s*(?:is|:)?\s*([^,.]+)/i);
   if (locMatchHi) {
     location = locMatchHi[1].trim();
   } else if (locMatchEn) {
@@ -45,8 +45,8 @@ export const parseSiteVoiceTranscript = (transcript: string): ExtractedSiteData 
   }
 
   // 3. Extract Site Name
-  const nameMatchHi = transcript.match(/(?:साइट का नाम|नाम)\s*(?:है|:)?\s*([^,\.]+)/i);
-  const nameMatchEn = transcript.match(/(?:site name|name)\s*(?:is|:)?\s*([^,\.]+)/i);
+  const nameMatchHi = transcript.match(/(?:साइट का नाम|नाम)\s*(?:है|:)?\s*([^,.]+)/i);
+  const nameMatchEn = transcript.match(/(?:site name|name)\s*(?:is|:)?\s*([^,.]+)/i);
   if (nameMatchHi) {
     name = nameMatchHi[1].trim();
   } else if (nameMatchEn) {

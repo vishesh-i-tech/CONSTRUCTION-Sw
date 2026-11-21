@@ -2,6 +2,7 @@ import React from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
 import { LabourRecord, Site } from '../../types';
 import { exportDailyAttendancePdf, exportLabourRegisterCsv } from '../../utils/reportExporter';
+import { formatDailyAttendanceShare, shareNativeOrWhatsApp } from '../../utils/shareUtils';
 import {
   X,
   ArrowLeft,
@@ -15,6 +16,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Camera,
+  Share2,
 } from 'lucide-react';
 
 interface LabourDateDetailModalProps {
@@ -61,6 +63,21 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
     exportLabourRegisterCsv(record, siteName);
   };
 
+  const handleShareAttendance = async () => {
+    const text = formatDailyAttendanceShare(
+      siteName,
+      record.date,
+      totalWorkers,
+      totalWages,
+      totalPaid,
+      balanceDue
+    );
+    await shareNativeOrWhatsApp({
+      title: `${siteName} Daily Attendance`,
+      text,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       {/* Backdrop */}
@@ -92,6 +109,15 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
 
           {/* Quick Action Icons */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Share Attendance via WhatsApp / Native */}
+            <button
+              onClick={handleShareAttendance}
+              className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition-colors"
+              title={language === 'hi' ? 'व्हाट्सएप / शेयर करें' : 'Share on WhatsApp'}
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
             {/* Download Day PDF */}
             <button
               onClick={handleDownloadPdf}
@@ -175,6 +201,7 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
               {entries.map((worker, index) => {
                 const isAbsent = worker.attendanceStatus === 'absent';
                 const isHalfDay = worker.attendanceStatus === 'half_day';
+                const isOvertime = worker.attendanceStatus === 'overtime';
 
                 return (
                   <div
@@ -201,6 +228,8 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
                                 ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400'
                                 : isHalfDay
                                 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                                : isOvertime
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400'
                                 : 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400'
                             }`}
                           >
@@ -208,6 +237,8 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
                               ? language === 'hi' ? 'अनुपस्थित' : 'Absent'
                               : isHalfDay
                               ? language === 'hi' ? 'आधा दिन (0.5)' : 'Half Day'
+                              : isOvertime
+                              ? language === 'hi' ? 'ओवरटाइम (1.5)' : 'Overtime'
                               : language === 'hi' ? 'पूरा दिन (1.0)' : 'Full Day'}
                           </span>
                         </div>
@@ -221,6 +252,8 @@ export const LabourDateDetailModal: React.FC<LabourDateDetailModalProps> = ({
                           ? Math.round((worker.dailyWage || 0) * 0.5)
                           : worker.attendanceStatus === 'absent'
                           ? 0
+                          : worker.attendanceStatus === 'overtime'
+                          ? Math.round((worker.dailyWage || 0) * 1.5)
                           : (worker.dailyWage || 0);
                         const paid = worker.paidAmount !== undefined ? worker.paidAmount : (worker.attendanceStatus === 'absent' ? 0 : earned);
                         const due = worker.balanceDue !== undefined ? worker.balanceDue : Math.max(0, earned - paid);

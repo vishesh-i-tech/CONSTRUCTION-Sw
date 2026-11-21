@@ -63,6 +63,7 @@ export const EditMaterialModal: React.FC<EditMaterialModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      const finalPaidAmount = paymentStatus === 'paid' ? totalCost : paymentStatus === 'pending' ? 0 : Number(paidAmount) || 0;
       await db.materials.update(material.id, {
         siteId,
         itemName: itemName.trim(),
@@ -72,9 +73,39 @@ export const EditMaterialModal: React.FC<EditMaterialModalProps> = ({
         totalCost,
         purchaseDate,
         paymentStatus,
-        paidAmount: paymentStatus === 'paid' ? totalCost : paymentStatus === 'pending' ? 0 : Number(paidAmount) || 0,
+        paidAmount: finalPaidAmount,
         notes: notes.trim() || undefined,
       });
+
+      // Synchronize linked ExpenseDue
+      const balanceDue = Math.max(0, totalCost - finalPaidAmount);
+      const existingDues = await db.dues.where('materialId').equals(material.id).toArray();
+      if (balanceDue === 0 || paymentStatus === 'paid') {
+        for (const d of existingDues) {
+          await db.dues.delete(d.id);
+        }
+      } else if (existingDues.length > 0) {
+        await db.dues.update(existingDues[0].id, {
+          siteId,
+          title: `Material Due: ${itemName.trim()}`,
+          amountDue: balanceDue,
+          amountPaid: 0,
+          status: 'pending',
+        });
+      } else {
+        await db.dues.put({
+          id: `due-${Date.now()}`,
+          siteId,
+          materialId: material.id,
+          title: `Material Due: ${itemName.trim()}`,
+          category: 'material',
+          amountDue: balanceDue,
+          amountPaid: 0,
+          dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: 'pending',
+          notes: `Auto-generated from material purchase of ${Number(quantity) || 1} ${unit}`,
+        });
+      }
 
       onMaterialUpdated();
       onClose();

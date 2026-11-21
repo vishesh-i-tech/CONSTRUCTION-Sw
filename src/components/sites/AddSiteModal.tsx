@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
 import { Site } from '../../types';
 import { db } from '../../core/db/database';
-import { getTodayFormatted, toIsoDate } from '../../utils/dateUtils';
+import { getTodayFormatted, getTodayIso, toIsoDate } from '../../utils/dateUtils';
 import {
   Building2,
   MapPin,
@@ -42,7 +42,7 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [budget, setBudget] = useState<string>(''); // Blank by default, no '0'
-  const [startDate, setStartDate] = useState(getTodayFormatted());
+  const [startDate, setStartDate] = useState(getTodayIso());
   const [expectedEndDate, setExpectedEndDate] = useState(''); // Blank by default as requested
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,7 +61,7 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
     setClientName('');
     setClientPhone('');
     setBudget('');
-    setStartDate(getTodayFormatted());
+    setStartDate(getTodayIso());
     setExpectedEndDate('');
     setNotes('');
     setIsContactModalOpen(false);
@@ -82,10 +82,13 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Load existing client contacts from indexedDB sites
+  // Load existing client contacts from indexedDB sites scoped to active contractor
   const loadSavedContacts = async () => {
     try {
-      const allSites = await db.sites.toArray();
+      const activeContractorId = localStorage.getItem('sitesaathi_active_user_id');
+      const allSites = activeContractorId
+        ? await db.sites.where('contractorId').equals(activeContractorId).toArray()
+        : await db.sites.toArray();
       const map = new Map<string, string>();
       allSites.forEach((s) => {
         if (s.clientPhone && s.clientPhone.trim()) {
@@ -375,41 +378,32 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
             </div>
           </div>
 
-          {/* Dates - Manual Text Input */}
+          {/* Dates - Native Date Picker */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{language === 'hi' ? 'काम शुरू होने की तारीख' : 'Start Date'}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">DD-MM-YYYY</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>{language === 'hi' ? 'काम शुरू होने की तारीख *' : 'Start Date *'}</span>
               </label>
               <input
-                type="text"
-                inputMode="numeric"
+                type="date"
+                required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                placeholder="DD-MM-YYYY"
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
               />
             </div>
 
             {/* Target Completion: Blank initially */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{language === 'hi' ? 'अपेक्षित पूर्णता तारीख' : 'Target Completion'}</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">DD-MM-YYYY</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>{language === 'hi' ? 'अपेक्षित पूर्णता तारीख' : 'Target Completion'}</span>
               </label>
               <input
-                type="text"
-                inputMode="numeric"
+                type="date"
                 value={expectedEndDate}
                 onChange={(e) => setExpectedEndDate(e.target.value)}
-                placeholder="DD-MM-YYYY"
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none dark:text-white"
               />
             </div>

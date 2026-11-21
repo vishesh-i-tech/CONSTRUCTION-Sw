@@ -1192,3 +1192,20 @@ This document tracks all technologies, libraries, and architectural modules used
 - **How it works (Under the Hood):**
   - Documents exact remediation targets for SiteSaathi security/math/Android bugs (Phase 1), FieldLog backend security hardening and R2 migration (Phase 2), Dexie `sync_outbox` and Daily Site Reporting UI merge (Phase 3), Material Request → Purchase → GRN + Site Tasks + FCM Escalations (Phase 4), and Gemini/Sarvam AI Voice + Meta WhatsApp Cloud API + optional DPDP-compliant Face Check (Phase 5).
 - **A short, simple summary:** Created a comprehensive, phase-by-phase engineering roadmap (`docs/Roadmap.md`) to stabilize SiteSaathi, safely merge FieldLog's backend and daily reporting workflows, and deliver TaskSpot operations features.
+
+
+---
+
+## Phase Review & Multi-Agent Quality Assurance: ChatGPT CLI Integration
+
+### 1. Technology: ChatGPT CLI Dedicated Project Review Integration (`chatgpt-cli`, `scripts/chatgpt-review.cjs`)
+- **Name of the Technology:** ChatGPT CLI Headless CDP Project Binding & Review Workflow
+- **What it does (Role & Purpose):**
+  - **Independent Review Gate:** Establishes an automated external review loop pairing Google Antigravity (`agy`) as the primary execution agent with ChatGPT as the principal software architecture reviewer and quality gatekeeper.
+  - **Context-Aware Phase Auditing:** Transmits repository status, git diffs, architectural schemas, and test reports directly to a persistent, project-bound ChatGPT thread.
+  - **Automated Verdicts:** Allows ChatGPT to audit every phase deliverable for architectural integrity, security vulnerabilities, multi-tenant database safety, and production readiness, returning standard verdicts (`APPROVED`, `APPROVED WITH CONDITIONS`, or `REJECTED`).
+- **How it works (Under the Hood):**
+  - Uses the locally installed `chatgpt-cli` connected via Chrome DevTools Protocol (CDP) to a persistent headless browser session.
+  - Binds the active workspace (`FEILDLOGG` / `CONSTRUCTION`) to a dedicated ChatGPT session.
+  - Provides `npm run review:chatgpt` (backed by `scripts/chatgpt-review.cjs`) to aggregate git status, recent commit diffs, and validation outputs, piping them cleanly to the ChatGPT thread with streaming and non-streaming feedback support.
+- **A short, simple summary:** Connected the local `chatgpt-cli` directly into the project workspace to serve as an independent architect and code reviewer across all implementation phases.

@@ -61,7 +61,7 @@ const contractorTokenMap = new Map<string, MemoryTokenState>();
 let gisScriptPromise: Promise<void> | null = null;
 let activeAuthResolver: ((token: string) => void) | null = null;
 let activeAuthRejecter: ((err: Error) => void) | null = null;
-let tokenClient: GoogleTokenClient | null = null;
+const contractorTokenClientMap = new Map<string, GoogleTokenClient>();
 
 const resolveContractorKey = (explicitContractorId?: string): string => {
   if (explicitContractorId && explicitContractorId.trim()) {
@@ -86,7 +86,7 @@ export const isNativeAndroidPlatform = (): boolean => {
  * Returns whether the Web Google Client ID is configured in the environment.
  */
 export const isGoogleAuthConfigured = (): boolean => {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const clientId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GOOGLE_CLIENT_ID : undefined;
   return typeof clientId === 'string' && clientId.trim().length > 0;
 };
 
@@ -94,7 +94,7 @@ export const isGoogleAuthConfigured = (): boolean => {
  * Retrieves the configured Google Client ID or throws a descriptive configuration error.
  */
 export const getGoogleClientId = (): string => {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const clientId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GOOGLE_CLIENT_ID : undefined;
   if (!clientId || typeof clientId !== 'string' || clientId.trim().length === 0) {
     throw new Error(
       'GOOGLE_CLIENT_ID_NOT_CONFIGURED: VITE_GOOGLE_CLIENT_ID is not configured in environment variables. ' +
@@ -183,9 +183,13 @@ export const fetchGoogleAccountIdentity = async (accessToken: string): Promise<G
   }
 
   try {
-    const tokenInfoResp = await fetch(
-      `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
-    );
+    const tokenInfoResp = await fetch('https://oauth2.googleapis.com/tokeninfo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ access_token: accessToken }).toString(),
+    });
     if (tokenInfoResp.ok) {
       const data = await tokenInfoResp.json();
       if (data.email) {
@@ -234,6 +238,7 @@ export const getGoogleAccountIdentity = (contractorId?: string): GoogleAccountId
 
 /**
  * Sets synthetic mock Google credentials for testing and automated evaluation.
+ * Strictly disabled in production builds.
  */
 export const setMockGoogleAuth = (
   contractorId: string,
@@ -241,6 +246,13 @@ export const setMockGoogleAuth = (
   identity: GoogleAccountIdentity,
   expiresInSec = 3600
 ): void => {
+  const isDevOrTest =
+    (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.DEV);
+  if (!isDevOrTest) {
+    console.warn('setMockGoogleAuth is disabled in production environments.');
+    return;
+  }
   contractorTokenMap.set(contractorId, {
     contractorId,
     accessToken,
@@ -294,8 +306,9 @@ export const requestGoogleAccessToken = async (
 
       const promptParam = options?.prompt || (options?.forcePrompt ? 'consent' : undefined);
 
-      if (!tokenClient || options?.forcePrompt || options?.prompt) {
-        tokenClient = oauth2.initTokenClient({
+      let client = contractorTokenClientMap.get(contractorKey);
+      if (!client || options?.forcePrompt || options?.prompt) {
+        client = oauth2.initTokenClient({
           client_id: clientId,
           scope: GOOGLE_AUTH_SCOPES,
           callback: async (response: GoogleTokenResponse) => {
@@ -353,9 +366,10 @@ export const requestGoogleAccessToken = async (
           },
           prompt: promptParam,
         });
+        contractorTokenClientMap.set(contractorKey, client);
       }
 
-      tokenClient.requestAccessToken({
+      client.requestAccessToken({
         prompt: promptParam,
       });
     } catch (err: any) {
@@ -374,8 +388,10 @@ export const requestGoogleAccessToken = async (
 export const clearGoogleAuthSession = (contractorId?: string): void => {
   if (contractorId) {
     contractorTokenMap.delete(contractorId);
+    contractorTokenClientMap.delete(contractorId);
   } else {
     contractorTokenMap.clear();
+    contractorTokenClientMap.clear();
   }
 };
 

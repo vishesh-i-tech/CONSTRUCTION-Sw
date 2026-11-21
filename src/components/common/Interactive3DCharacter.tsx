@@ -26,34 +26,11 @@ export const Interactive3DCharacter: React.FC<Interactive3DCharacterProps> = ({
   const dragStartRef = useRef({ x: 0, y: 0, startRotY: 0, startRotX: 0 });
   const velocityRef = useRef({ vx: 0, vy: 0, lastX: 0, lastY: 0, lastTime: 0 });
   const animFrameRef = useRef<number | null>(null);
-  const idleAnimRef = useRef<number | null>(null);
-
-  // Subtle ambient floating / idle sway when user isn't dragging
-  useEffect(() => {
-    if (isDragging || hasInteracted) return;
-
-    let startTime = Date.now();
-    const animateIdle = () => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      // Gentle sine-wave idle breathing sway
-      const ambientY = Math.sin(elapsed * 1.5) * 12;
-      const ambientX = Math.cos(elapsed * 1.2) * 5;
-      setRotY(ambientY);
-      setRotX(ambientX);
-      idleAnimRef.current = requestAnimationFrame(animateIdle);
-    };
-
-    idleAnimRef.current = requestAnimationFrame(animateIdle);
-    return () => {
-      if (idleAnimRef.current) cancelAnimationFrame(idleAnimRef.current);
-    };
-  }, [isDragging, hasInteracted]);
 
   // Pointer Down (Mouse click or Touch start)
   const handlePointerDown = (e: React.PointerEvent) => {
     // Cancel any running inertia animation
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    if (idleAnimRef.current) cancelAnimationFrame(idleAnimRef.current);
 
     setIsDragging(true);
     setHasInteracted(true);

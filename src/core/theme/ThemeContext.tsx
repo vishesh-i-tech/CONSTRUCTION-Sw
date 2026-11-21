@@ -36,6 +36,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setTrade = (newTrade: TradeCategory) => {
     setTradeState(newTrade);
     localStorage.setItem('sitesaathi_trade', newTrade);
+    const activeId = localStorage.getItem('sitesaathi_active_user_id');
+    if (activeId) {
+      import('../../core/db/database').then(({ db }) => {
+        db.account.update(activeId, { trade: newTrade }).catch(() => {});
+      });
+    }
   };
 
   const setThemeMode = (mode: ThemeMode) => {
@@ -46,6 +52,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('sitesaathi_lang', lang);
+    const activeId = localStorage.getItem('sitesaathi_active_user_id');
+    if (activeId) {
+      import('../../core/db/database').then(({ db }) => {
+        db.account.update(activeId, { language: lang }).catch(() => {});
+      });
+    }
   };
 
   // Sync DOM with trade and enforce light mode

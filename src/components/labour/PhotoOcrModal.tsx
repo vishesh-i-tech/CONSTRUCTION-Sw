@@ -3,6 +3,7 @@ import { useTheme } from '../../core/theme/ThemeContext';
 import { Site, LabourRecord, LabourEntry } from '../../types';
 import { db } from '../../core/db/database';
 import { runLabourRegisterOcr, RegisterValidationStatus } from '../../utils/ocrProcessor';
+import { compressImage } from '../../utils/imageCompressor';
 import {
   Camera,
   Upload,
@@ -176,7 +177,7 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
   /**
    * Capture a snapshot from the active video stream and feed into OCR pipeline.
    */
-  const handleCapturePhoto = () => {
+  const handleCapturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
 
@@ -191,14 +192,17 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const rawDataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
     // Stop all camera media tracks immediately upon capture
     stopCamera();
 
+    // Downscale and compress before storing in state and running OCR
+    const compressedUrl = await compressImage(rawDataUrl, 1280, 200 * 1024);
+
     // Pass captured image into existing OCR processing pipeline
-    setPhotoUrl(dataUrl);
-    processImage(dataUrl);
+    setPhotoUrl(compressedUrl);
+    processImage(compressedUrl);
   };
 
   /**
@@ -241,17 +245,24 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      setPhotoUrl(dataUrl);
-      processImage(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressedUrl = await compressImage(file, 1280, 200 * 1024);
+      setPhotoUrl(compressedUrl);
+      processImage(compressedUrl);
+    } catch (err) {
+      console.error('Image compression failed:', err);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const dataUrl = event.target?.result as string;
+        setPhotoUrl(dataUrl);
+        processImage(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const processImage = async (dataUrl: string) => {
@@ -293,6 +304,7 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
     const status = updated[index].attendanceStatus;
     if (status === 'half_day') updated[index].paidAmount = Math.round(base * 0.5);
     else if (status === 'absent') updated[index].paidAmount = 0;
+    else if (status === 'overtime') updated[index].paidAmount = Math.round(base * 1.5);
     else updated[index].paidAmount = base;
 
     setEntries(updated);
@@ -372,8 +384,15 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
     setIsSaving(true);
     try {
       const recordId = `lr-${Date.now()}`;
-      const totalDailyWage = entries.reduce((acc, e) => acc + (Number(e.dailyWage) || 0), 0);
+      const totalDailyWage = entries.reduce((acc, e) => {
+        const base = Number(e.dailyWage) || 0;
+        if (e.attendanceStatus === 'absent') return acc;
+        if (e.attendanceStatus === 'half_day') return acc + Math.round(base * 0.5);
+        if (e.attendanceStatus === 'overtime') return acc + Math.round(base * 1.5);
+        return acc + base;
+      }, 0);
       const totalPaid = entries.reduce((acc, e) => acc + (Number(e.paidAmount) || 0), 0);
+      const activeWorkersCount = entries.filter((e) => e.attendanceStatus !== 'absent').length;
 
       const labourRecord: LabourRecord = {
         id: recordId,
@@ -381,16 +400,18 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
         date,
         rawPhotoUrl: photoUrl || undefined,
         ocrRawText: 'Scanned from handwritten attendance register',
-        totalWorkers: entries.length,
+        totalWorkers: activeWorkersCount,
         totalDailyWage,
         totalPaid,
         entries: entries.map((e) => ({ ...e, recordId })),
       };
 
-      await db.labourRecords.put(labourRecord);
-      for (const entry of labourRecord.entries || []) {
-        await db.labourEntries.put(entry);
-      }
+      await db.transaction('rw', [db.labourRecords, db.labourEntries], async () => {
+        await db.labourRecords.put(labourRecord);
+        for (const entry of labourRecord.entries || []) {
+          await db.labourEntries.put(entry);
+        }
+      });
 
       stopCamera();
       onRecordSaved();
@@ -405,7 +426,13 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
     }
   };
 
-  const totalWages = entries.reduce((acc, e) => acc + (Number(e.dailyWage) || 0), 0);
+  const totalWages = entries.reduce((acc, e) => {
+    const base = Number(e.dailyWage) || 0;
+    if (e.attendanceStatus === 'absent') return acc;
+    if (e.attendanceStatus === 'half_day') return acc + Math.round(base * 0.5);
+    if (e.attendanceStatus === 'overtime') return acc + Math.round(base * 1.5);
+    return acc + base;
+  }, 0);
   const missingWageCount = entries.filter(
     (e) => e.attendanceStatus !== 'absent' && (!e.dailyWage || e.dailyWage <= 0)
   ).length;
@@ -878,6 +905,7 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
                               >
                                 <option value="Mason">Mason</option>
                                 <option value="Helper">Helper</option>
+                                <option value="Plasterer">Plasterer</option>
                                 <option value="Carpenter">Carpenter</option>
                                 <option value="Electrician">Electrician</option>
                                 <option value="Plumber">Plumber</option>
@@ -898,6 +926,7 @@ export const PhotoOcrModal: React.FC<PhotoOcrModalProps> = ({
                               >
                                 <option value="full_day">Full (P)</option>
                                 <option value="half_day">Half (H)</option>
+                                <option value="overtime">Overtime (OT)</option>
                                 <option value="absent">Absent (A)</option>
                               </select>
                             </div>

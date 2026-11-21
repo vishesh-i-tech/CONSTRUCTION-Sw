@@ -2,6 +2,61 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Site, ExpenseDue, ToolRecord, LabourRecord, MaterialRecord, ClientPayment, MachineryRecord } from '../types';
 
+/**
+ * Sanitizes text for jsPDF standard fonts.
+ * If text contains Devanagari Unicode characters, maps common Hindi construction terms
+ * to English/Romanized terms so PDFs never render garbled '???' glyphs.
+ */
+export const safePdfText = (str?: string): string => {
+  if (!str) return '';
+  if (!/[\u0900-\u097F]/.test(str)) {
+    return str;
+  }
+
+  let out = str
+    .replace(/साइट साथी/g, 'SiteSaathi')
+    .replace(/मिस्त्री|राजमिस्त्री/g, 'Mason')
+    .replace(/हेल्पर|मजदूर|लेबर/g, 'Helper')
+    .replace(/कारीगर/g, 'Artisan')
+    .replace(/बढ़ई/g, 'Carpenter')
+    .replace(/पेंटर/g, 'Painter')
+    .replace(/वेल्डर/g, 'Welder')
+    .replace(/सुपरवाइजर/g, 'Supervisor')
+    .replace(/प्लास्टर/g, 'Plasterer')
+    .replace(/हाजिरी|उपस्थित/g, 'Present')
+    .replace(/अनुपस्थित/g, 'Absent')
+    .replace(/आधा दिन/g, 'Half Day')
+    .replace(/पूरा दिन/g, 'Full Day')
+    .replace(/ओवरटाइम/g, 'Overtime')
+    .replace(/सीमेंट/g, 'Cement')
+    .replace(/बैग|बोरी/g, 'Bags')
+    .replace(/रेत|बालू/g, 'Sand')
+    .replace(/बजरी|गिट्टी/g, 'Gravel/Aggregate')
+    .replace(/ईंट|ईंटें/g, 'Bricks')
+    .replace(/सरिया|स्टील/g, 'Steel/TMT')
+    .replace(/पाइप/g, 'Pipes')
+    .replace(/तार|बिजली/g, 'Wiring/Electrical')
+    .replace(/प्लेट्स/g, 'Plates')
+    .replace(/उधारी|बाकी/g, 'Due')
+    .replace(/चुकता|जमा/g, 'Paid')
+    .replace(/नकद/g, 'Cash');
+
+  const devanagariMap: Record<string, string> = {
+    'अ': 'A', 'आ': 'Aa', 'इ': 'I', 'ई': 'Ee', 'उ': 'U', 'ऊ': 'Oo', 'ऋ': 'Ri', 'ए': 'E', 'ऐ': 'Ai', 'ओ': 'O', 'औ': 'Au',
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'ृ': 'ri', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ँ': 'n', 'ः': 'h', '्': '',
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
+  };
+
+  out = out.replace(/[\u0900-\u097F]/g, (char) => devanagariMap[char] || '');
+  return out.trim();
+};
+
 export const exportSiteReportPdf = (
   site: Site,
   finance: any,
@@ -9,7 +64,9 @@ export const exportSiteReportPdf = (
   materials: MaterialRecord[],
   dues: ExpenseDue[],
   clientPayments: ClientPayment[] = [],
-  companyName: string = 'SiteSaathi Contractor'
+  companyName: string = 'SiteSaathi Contractor',
+  labourRecords: LabourRecord[] = [],
+  machinery: MachineryRecord[] = []
 ) => {
   const doc = new jsPDF();
 
@@ -176,8 +233,73 @@ export const exportSiteReportPdf = (
     styles: { fontSize: 8 },
   });
 
+  // 5. Labour Attendance & Wage Outflow Summary Table
+  if (labourRecords.length > 0) {
+    currentY = (doc as any).lastAutoTable.finalY + 12;
+    if (currentY > 230) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('5. Labour Attendance & Daily Wages Summary', 14, currentY);
+
+    const labourRows = labourRecords.map((l) => [
+      l.date,
+      `${l.totalWorkers || (l.entries?.length || 0)} Workers`,
+      `Rs. ${(l.totalDailyWage || 0).toLocaleString('en-IN')}`,
+      `Rs. ${(l.totalPaid || 0).toLocaleString('en-IN')}`,
+      `Rs. ${Math.max(0, (l.totalDailyWage || 0) - (l.totalPaid || 0)).toLocaleString('en-IN')}`,
+      safePdfText(l.notes) || '-',
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 4,
+      head: [['Date', 'Workers Count', 'Total Wages', 'Paid Amount', 'Balance Due', 'Notes']],
+      body: labourRows,
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246] }, // Blue-500
+      styles: { fontSize: 8 },
+    });
+  }
+
+  // 6. Machinery & Equipment Operations Table
+  if (machinery.length > 0) {
+    currentY = (doc as any).lastAutoTable.finalY + 12;
+    if (currentY > 230) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('6. Machinery & Fuel Operations Ledger', 14, currentY);
+
+    const machineryRows = machinery.map((m) => {
+      const isOwned = m.notes?.includes('[Self-Owned]') || (m.rentalCost === 0 && (!m.rentalHoursOrDays || m.rentalHoursOrDays === 0));
+      return [
+        m.logDate,
+        m.machineType,
+        isOwned ? 'Self-Owned' : 'Rental',
+        m.fuelCost ? `Rs. ${m.fuelCost.toLocaleString('en-IN')}` : '-',
+        m.rentalCost ? `Rs. ${m.rentalCost.toLocaleString('en-IN')}` : '-',
+        `Rs. ${m.totalCost.toLocaleString('en-IN')}`,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 4,
+      head: [['Log Date', 'Machine Type', 'Ownership', 'Fuel Cost', 'Rental Cost', 'Total Cost']],
+      body: machineryRows,
+      theme: 'grid',
+      headStyles: { fillColor: [139, 92, 246] }, // Violet-500
+      styles: { fontSize: 8 },
+    });
+  }
+
   // Save the PDF
-  doc.save(`SiteSaathi_Report_${site.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+  doc.save(`SiteSaathi_Report_${safePdfText(site.name).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 };
 
 // Export Daily Attendance PDF for a single date
@@ -229,15 +351,33 @@ export const exportDailyAttendancePdf = (
   doc.text(`Rs. ${balanceDue.toLocaleString('en-IN')}`, 165, 53);
 
   // Workers Attendance Table
-  const tableRows = (record.entries || []).map((e, index) => [
-    index + 1,
-    e.workerName,
-    e.role,
-    e.attendanceStatus === 'half_day' ? 'Half Day (0.5)' : e.attendanceStatus === 'absent' ? 'Absent (0.0)' : 'Full Day (1.0)',
-    `Rs. ${e.dailyWage}`,
-    `Rs. ${e.paidAmount !== undefined ? e.paidAmount : e.dailyWage}`,
-    `Rs. ${e.balanceDue || 0}`,
-  ]);
+  const tableRows = (record.entries || []).map((e, index) => {
+    const earned = e.attendanceStatus === 'half_day'
+      ? Math.round((e.dailyWage || 0) * 0.5)
+      : e.attendanceStatus === 'absent'
+      ? 0
+      : e.attendanceStatus === 'overtime'
+      ? Math.round((e.dailyWage || 0) * 1.5)
+      : (e.dailyWage || 0);
+    const paid = e.paidAmount !== undefined ? e.paidAmount : earned;
+    const due = e.balanceDue !== undefined ? e.balanceDue : Math.max(0, earned - paid);
+
+    return [
+      index + 1,
+      e.workerName,
+      e.role,
+      e.attendanceStatus === 'half_day'
+        ? 'Half Day (0.5)'
+        : e.attendanceStatus === 'absent'
+        ? 'Absent (0.0)'
+        : e.attendanceStatus === 'overtime'
+        ? 'Overtime (1.5)'
+        : 'Full Day (1.0)',
+      `Rs. ${e.dailyWage}`,
+      `Rs. ${paid}`,
+      `Rs. ${due}`,
+    ];
+  });
 
   autoTable(doc, {
     startY: 66,
@@ -349,27 +489,42 @@ export const exportSiteTotalAttendancePdf = (
   doc.save(`Site_Attendance_Summary_${site.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 };
 
+const formatCsvCell = (val: any): string => {
+  if (val === null || val === undefined) return '""';
+  let str = String(val);
+  // Neutralize spreadsheet formula injection characters (=, +, -, @, \t, \r)
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  // Escape internal double-quotes by doubling them
+  return `"${str.replace(/"/g, '""')}"`;
+};
+
 export const exportLabourRegisterCsv = (record: LabourRecord, siteName: string) => {
   const headers = ['Date', 'Site', 'Worker Name', 'Role', 'Attendance', 'Daily Wage', 'Paid Amount', 'Balance Due'];
   const rows = (record.entries || []).map((e) => [
-    record.date,
-    `"${siteName}"`,
-    `"${e.workerName}"`,
-    e.role,
-    e.attendanceStatus,
-    e.dailyWage,
-    e.paidAmount,
-    e.balanceDue,
+    formatCsvCell(record.date),
+    formatCsvCell(siteName),
+    formatCsvCell(e.workerName),
+    formatCsvCell(e.role),
+    formatCsvCell(e.attendanceStatus),
+    formatCsvCell(e.dailyWage),
+    formatCsvCell(e.paidAmount !== undefined ? e.paidAmount : e.dailyWage),
+    formatCsvCell(e.balanceDue || 0),
   ]);
 
-  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-  const encodedUri = encodeURI(csvContent);
+  const csvRows = [headers.map(formatCsvCell).join(','), ...rows.map((r) => r.join(','))];
+  // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel compatibility with Devanagari & UTF-8 characters
+  const csvContent = '\uFEFF' + csvRows.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
-  link.setAttribute('download', `Labour_Register_${siteName}_${record.date}.csv`);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Labour_Register_${siteName.replace(/[^a-zA-Z0-9_\u0900-\u097F]/g, '_')}_${record.date}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 // Export Client Receipts & Payment Ledger PDF

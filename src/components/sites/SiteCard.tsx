@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useTheme } from '../../core/theme/ThemeContext';
 import { Site } from '../../types';
 import { db } from '../../core/db/database';
@@ -29,28 +30,18 @@ export const SiteCard: React.FC<SiteCardProps> = ({
   onDeleteSite,
 }) => {
   const { t, language, tradeConfig } = useTheme();
-  const [finance, setFinance] = useState<any>(null);
-  const [overdueCount, setOverdueCount] = useState<number>(0);
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
-  useEffect(() => {
-    let isMounted = true;
-    db.getSiteFinanceSummary(site.id).then((summary) => {
-      if (isMounted) setFinance(summary);
-    });
-
-    db.tools.where('siteId').equals(site.id).toArray().then((tools) => {
-      if (isMounted) {
-        const overdues = tools.filter(
-          (t) => t.status === 'overdue' || (t.actualReturnDate === null && new Date(t.expectedReturnDate) < new Date())
-        );
-        setOverdueCount(overdues.length);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [site.id]);
+  const finance = useLiveQuery(() => db.getSiteFinanceSummary(site.id), [site.id]);
+  const overdueCount = useLiveQuery(
+    async () => {
+      const tools = await db.tools.where('siteId').equals(site.id).toArray();
+      return tools.filter(
+        (t) => (t.status === 'overdue' || (t.actualReturnDate === null && t.expectedReturnDate < todayStr)) && !t.actualReturnDate
+      ).length;
+    },
+    [site.id, todayStr]
+  ) || 0;
 
   const getWorkStatusBadge = () => {
     switch (site.workStatus) {
@@ -164,9 +155,15 @@ export const SiteCard: React.FC<SiteCardProps> = ({
           {/* Key Quick Flags */}
           <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-0.5">
             <span>{expenseRatio}% {language === 'hi' ? 'बजट प्रयुक्त' : 'budget used'}</span>
-            <span className="text-slate-700 dark:text-slate-300 font-semibold">
-              {language === 'hi' ? 'बचत' : 'Est. Margin'}: ₹{(finance?.estimatedProfit || 0).toLocaleString('en-IN')}
-            </span>
+            {(() => {
+              const estimatedProfit = finance?.estimatedProfit ?? ((site.estimatedBudget || 0) - totalExpense);
+              const isNegativeProfit = estimatedProfit < 0;
+              return (
+                <span className={`font-semibold ${isNegativeProfit ? 'text-rose-600 dark:text-rose-400 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
+                  {language === 'hi' ? (isNegativeProfit ? 'घाटा (Loss)' : 'बचत') : 'Est. Margin'}: ₹{estimatedProfit.toLocaleString('en-IN')}
+                </span>
+              );
+            })()}
           </div>
         </div>
 

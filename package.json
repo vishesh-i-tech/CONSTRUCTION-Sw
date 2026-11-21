@@ -7,15 +7,24 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "tsx --test src/**/*.test.ts",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
-    "apk:build": "npm run build && npx cap sync android && cd android && gradlew.bat assembleDebug"
+    "apk:build": "npm run build && npx cap sync android && node scripts/build-apk.cjs",
+    "review:chatgpt": "node scripts/chatgpt-review.cjs",
+    "chatgpt": "chatgpt ask"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/camera": "^8.2.6",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/geolocation": "^8.2.5",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "dexie": "^4.4.5",
@@ -36,10 +45,14 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "autoprefixer": "^10.5.5",
+    "fake-indexeddb": "^6.2.8",
     "oxlint": "^1.79.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^4.1.12"
   }
 }

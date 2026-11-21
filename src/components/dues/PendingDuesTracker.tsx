@@ -20,7 +20,9 @@ import {
   Wrench,
   Truck,
   Users,
+  Share2,
 } from 'lucide-react';
+import { shareNativeOrWhatsApp, formatPendingDueShare } from '../../utils/shareUtils';
 
 interface PendingDuesTrackerProps {
   dues: ExpenseDue[];
@@ -342,6 +344,23 @@ export const PendingDuesTracker: React.FC<PendingDuesTrackerProps> = ({
 
                   {/* Actions & Status Badge */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {!isPaid && (
+                      <button
+                        onClick={() => {
+                          const site = siteMap.get(due.siteId);
+                          const balanceDue = due.amountDue - (due.amountPaid || 0);
+                          const text = formatPendingDueShare(due.title, balanceDue, due.dueDate, site?.name);
+                          shareNativeOrWhatsApp({
+                            title: `Payment Reminder: ${due.title}`,
+                            text,
+                          });
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-green-600 rounded-lg hover:bg-green-50 dark:hover:bg-green-950/40 cursor-pointer"
+                        title={language === 'hi' ? 'व्हाट्सएप पर रिमाइंडर भेजें' : 'Share WhatsApp Reminder'}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {onEditDue && (
                       <button
                         onClick={() => onEditDue(due)}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
 import { ContractorAccount, TradeCategory, ThemeMode, Language } from '../../types';
 import { TRADE_CONFIGS, ALL_TRADE_KEYS } from '../../core/theme/tradeConfigs';
@@ -98,12 +98,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Clear Confirmation
+  // Clear & Security Action Confirmation
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
   const [isConfirmSampleOpen, setIsConfirmSampleOpen] = useState(false);
   const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [pinPromptAction, setPinPromptAction] = useState<
+    'clear' | 'disablePinLock' | 'disableAntiDelete' | 'changePin' | null
+  >(null);
+  const [pendingNewPin, setPendingNewPin] = useState('');
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Synchronize profile and security state whenever account changes
+  useEffect(() => {
+    if (account) {
+      setEditName(account.name || '');
+      setEditPhone(account.phone?.replace(/\D/g, '') || '');
+      setEditCompany(account.companyName || '');
+      setEditEmail(account.email || '');
+      setIsPinLockEnabled(account.isPinLockEnabled || false);
+      setIsBiometricEnabled(account.isBiometricEnabled || false);
+      setIsAntiDeleteEnabled(account.isAntiDeleteEnabled || false);
+    }
+  }, [account?.id, account]);
 
   // Hardware biometric detection
   const hasBiometricSupport = typeof window !== 'undefined' && !!window.PublicKeyCredential;
@@ -163,8 +180,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTogglePinLock = async () => {
     if (!account?.id) return;
     const nextState = !isPinLockEnabled;
+    // If turning off an existing PIN lock, require current PIN verification
+    if (!nextState && (account.pinLock || account.password)) {
+      setPinPromptAction('disablePinLock');
+      setEnteredPin('');
+      setPinError('');
+      setPinPromptOpen(true);
+      return;
+    }
     if (nextState && !pinCode && !account.pinLock) {
-      setSecurityNotice(language === 'hi' ? 'कृपया पहले 4 अंकों का पिन दर्ज करें' : 'Please set a 4-digit PIN first');
+      setSecurityNotice(language === 'hi' ? 'कृपया पहले 4 से 6 अंकों का पिन दर्ज करें' : 'Please set a 4 to 6-digit PIN first');
       return;
     }
     setIsPinLockEnabled(nextState);
@@ -172,6 +197,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     await db.account.update(account.id, {
       isPinLockEnabled: nextState,
       pinLock: pinToSave,
+      password: pinToSave || account.password,
     });
     if (pinCode) {
       setPinCode('');
@@ -191,9 +217,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSecurityNotice(language === 'hi' ? 'पिन 4 से 6 अंकों का होना चाहिए' : 'PIN must be between 4 and 6 digits');
       return;
     }
+    // If account already has a PIN or password, require verifying current PIN first
+    const targetCred = account.pinLock || account.password;
+    if (targetCred) {
+      setPendingNewPin(cleanPin);
+      setPinPromptAction('changePin');
+      setEnteredPin('');
+      setPinError('');
+      setPinPromptOpen(true);
+      return;
+    }
     const hashedPin = await hashCredential(cleanPin);
     await db.account.update(account.id, {
       pinLock: hashedPin,
+      password: hashedPin,
       isPinLockEnabled: true,
     });
     setIsPinLockEnabled(true);
@@ -229,6 +266,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleToggleAntiDelete = async () => {
     if (!account?.id) return;
     const nextState = !isAntiDeleteEnabled;
+    // If turning off Anti-Delete, require verifying current PIN first
+    if (!nextState && (account.pinLock || account.password)) {
+      setPinPromptAction('disableAntiDelete');
+      setEnteredPin('');
+      setPinError('');
+      setPinPromptOpen(true);
+      return;
+    }
     setIsAntiDeleteEnabled(nextState);
     await db.account.update(account.id, {
       isAntiDeleteEnabled: nextState,
@@ -298,15 +343,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleDownloadEncryptedBackup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!exportPassphrase || exportPassphrase.length < 4) {
+    const pass = exportPassphrase.trim();
+    if (!pass || pass.length < 8) {
       setExportError(
         language === 'hi'
-          ? 'पासवर्ड कम से कम 4 अक्षरों का होना चाहिए'
-          : 'Passphrase must be at least 4 characters'
+          ? 'पासवर्ड कम से कम 8 अक्षरों का होना चाहिए'
+          : 'Passphrase must be at least 8 characters'
       );
       return;
     }
-    if (exportPassphrase !== confirmExportPassphrase) {
+    if (pass !== confirmExportPassphrase.trim()) {
       setExportError(
         language === 'hi'
           ? 'दोनों पासवर्ड मेल नहीं खा रहे हैं'
@@ -316,7 +362,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     setExportError('');
     try {
-      const pass = exportPassphrase.trim();
       setExportPassphrase('');
       setConfirmExportPassphrase('');
       setIsEncryptExportModalOpen(false);
@@ -467,6 +512,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleRequestClearData = () => {
     if (isAntiDeleteEnabled || (isPinLockEnabled && account?.pinLock)) {
+      setPinPromptAction('clear');
       setPinPromptOpen(true);
       setEnteredPin('');
       setPinError('');
@@ -475,16 +521,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // SEC-DEF-001 FIX: Constant-time PBKDF2 PIN verification for anti-delete gate
-  const handleVerifyPinForClear = async () => {
-    const targetCred = account?.pinLock || account?.password || '';
-    const verifyRes = await verifyCredential(enteredPin, targetCred);
-    if (verifyRes.isValid) {
+  // Constant-time PBKDF2 PIN verification for sensitive actions (clear data, disable lock/anti-delete, change PIN)
+  const handleVerifyPinAction = async () => {
+    if (!account?.id) return;
+    const targetCred = account.pinLock || account.password || '';
+    if (!targetCred) {
       setPinPromptOpen(false);
-      setIsConfirmClearOpen(true);
-    } else {
-      setPinError(language === 'hi' ? 'गलत पिन दर्ज किया गया' : 'Incorrect security PIN');
+      return;
     }
+    const verifyRes = await verifyCredential(enteredPin, targetCred);
+    if (!verifyRes.isValid) {
+      setPinError(language === 'hi' ? 'गलत पिन दर्ज किया गया' : 'Incorrect security PIN');
+      return;
+    }
+
+    setPinPromptOpen(false);
+    setEnteredPin('');
+    setPinError('');
+
+    if (pinPromptAction === 'clear') {
+      setIsConfirmClearOpen(true);
+    } else if (pinPromptAction === 'disablePinLock') {
+      setIsPinLockEnabled(false);
+      await db.account.update(account.id, { isPinLockEnabled: false });
+      setSecurityNotice(language === 'hi' ? 'पिन लॉक बंद कर दिया गया' : 'PIN Lock disabled');
+      setTimeout(() => setSecurityNotice(''), 2500);
+    } else if (pinPromptAction === 'disableAntiDelete') {
+      setIsAntiDeleteEnabled(false);
+      await db.account.update(account.id, { isAntiDeleteEnabled: false });
+      setSecurityNotice(language === 'hi' ? 'एंटी-डिलीट सुरक्षा बंद की गई' : 'Anti-Delete protection turned off');
+      setTimeout(() => setSecurityNotice(''), 2500);
+    } else if (pinPromptAction === 'changePin') {
+      const cleanPin = pendingNewPin.trim().replace(/\D/g, '');
+      const hashedPin = await hashCredential(cleanPin);
+      await db.account.update(account.id, {
+        pinLock: hashedPin,
+        password: hashedPin,
+        isPinLockEnabled: true,
+      });
+      setIsPinLockEnabled(true);
+      setPinCode('');
+      setPendingNewPin('');
+      setSecurityNotice(language === 'hi' ? 'सुरक्षा पिन सुरक्षित रूप से सेव हुआ' : 'Security PIN saved successfully');
+      setTimeout(() => setSecurityNotice(''), 2500);
+    }
+    setPinPromptAction(null);
   };
 
   return (
@@ -690,7 +771,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       key={cat}
                       type="button"
-                      onClick={() => setTrade(cat)}
+                      onClick={async () => {
+                        setTrade(cat);
+                        if (account?.id) await db.account.update(account.id, { trade: cat });
+                      }}
                       className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 btn-tactile hover:-translate-y-0.5 ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 shadow-xs font-bold text-blue-700 dark:text-blue-300 ring-1 ring-blue-500'
@@ -717,7 +801,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setLanguage('hi')}
+                    onClick={async () => {
+                      setLanguage('hi');
+                      if (account?.id) await db.account.update(account.id, { language: 'hi' });
+                    }}
                     className={`py-2 px-3 rounded-xl border font-bold transition-all text-center ${
                       language === 'hi'
                         ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400'
@@ -728,7 +815,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLanguage('en')}
+                    onClick={async () => {
+                      setLanguage('en');
+                      if (account?.id) await db.account.update(account.id, { language: 'en' });
+                    }}
                     className={`py-2 px-3 rounded-xl border font-bold transition-all text-center ${
                       language === 'en'
                         ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400'
@@ -1019,21 +1109,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       </div>
 
-      {/* PIN Verification Modal for Anti-Delete / Clear All Data */}
+      {/* PIN Verification Modal for Security Operations */}
       {pinPromptOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setPinPromptOpen(false)} />
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+            onClick={() => {
+              setPinPromptOpen(false);
+              setPinPromptAction(null);
+            }}
+          />
           <div className="relative z-10 bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
               <Lock className="w-5 h-5" />
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                {language === 'hi' ? 'एंटी-डिलीट सुरक्षा पिन' : 'Security PIN Required'}
+                {language === 'hi' ? 'सुरक्षा पिन सत्यापन' : 'Security PIN Verification'}
               </h3>
             </div>
             <p className="text-xs text-slate-500">
-              {language === 'hi'
-                ? 'डेटा हटाने के लिए अपना सुरक्षा पिन दर्ज करें:'
-                : 'Enter your security PIN to authorize wiping data:'}
+              {pinPromptAction === 'clear'
+                ? language === 'hi'
+                  ? 'डेटा हटाने के लिए अपना सुरक्षा पिन दर्ज करें:'
+                  : 'Enter your security PIN to authorize wiping data:'
+                : pinPromptAction === 'disablePinLock'
+                ? language === 'hi'
+                  ? 'पिन लॉक बंद करने के लिए वर्तमान पिन दर्ज करें:'
+                  : 'Enter current PIN to disable PIN lock:'
+                : pinPromptAction === 'disableAntiDelete'
+                ? language === 'hi'
+                  ? 'एंटी-डिलीट बंद करने के लिए वर्तमान पिन दर्ज करें:'
+                  : 'Enter current PIN to disable Anti-Delete protection:'
+                : language === 'hi'
+                ? 'नया पिन सेट करने के लिए वर्तमान सुरक्षा पिन दर्ज करें:'
+                : 'Enter your current PIN to authorize setting a new PIN:'}
             </p>
             {pinError && (
               <p className="text-xs text-red-600 font-semibold">{pinError}</p>
@@ -1050,14 +1158,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleVerifyPinForClear}
-                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+                onClick={handleVerifyPinAction}
+                className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
               >
                 {language === 'hi' ? 'सत्यापित करें' : 'Verify'}
               </button>
               <button
                 type="button"
-                onClick={() => setPinPromptOpen(false)}
+                onClick={() => {
+                  setPinPromptOpen(false);
+                  setPinPromptAction(null);
+                }}
                 className="py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
               >
                 {language === 'hi' ? 'रद्द' : 'Cancel'}

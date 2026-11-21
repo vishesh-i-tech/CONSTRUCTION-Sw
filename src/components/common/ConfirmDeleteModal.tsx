@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
-import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Trash2, X, Lock } from 'lucide-react';
+import { ContractorAccount } from '../../types';
+import { verifyCredential } from '../../utils/cryptoUtils';
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean;
@@ -9,6 +11,8 @@ interface ConfirmDeleteModalProps {
   title?: string;
   message?: string;
   itemTitle?: string;
+  account?: ContractorAccount | null;
+  isAntiDeleteEnabled?: boolean;
 }
 
 export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
@@ -18,10 +22,52 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   title,
   message,
   itemTitle,
+  account,
+  isAntiDeleteEnabled,
 }) => {
   const { language, t } = useTheme();
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   if (!isOpen) return null;
+
+  const antiDeleteActive = isAntiDeleteEnabled ?? account?.isAntiDeleteEnabled ?? false;
+  const targetCred = account?.pinLock || account?.password || '';
+
+  const handleConfirmClick = async () => {
+    if (antiDeleteActive && targetCred) {
+      if (!pin.trim()) {
+        setPinError(language === 'hi' ? 'कृपया सुरक्षा पिन दर्ज करें' : 'Please enter security PIN');
+        return;
+      }
+      setIsVerifying(true);
+      setPinError('');
+      try {
+        const verifyRes = await verifyCredential(pin.trim(), targetCred);
+        if (!verifyRes.isValid) {
+          setPinError(language === 'hi' ? 'गलत सुरक्षा पिन! हटाने की अनुमति नहीं है।' : 'Incorrect security PIN! Deletion denied.');
+          return;
+        }
+      } catch (err) {
+        setPinError('Verification failed');
+        return;
+      } finally {
+        setIsVerifying(false);
+      }
+    }
+
+    setPin('');
+    setPinError('');
+    onConfirm();
+    onClose();
+  };
+
+  const handleClose = () => {
+    setPin('');
+    setPinError('');
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
@@ -58,26 +104,61 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
               "{itemTitle}"
             </div>
           )}
+
+          {/* Anti-Delete Security PIN Input */}
+          {antiDeleteActive && targetCred && (
+            <div className="pt-2 pb-1 space-y-2 border-t border-slate-100 dark:border-slate-800">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-rose-500" />
+                <span>
+                  {language === 'hi'
+                    ? 'एंटी-डिलीट सुरक्षा सक्रिय: पुष्टि हेतु सुरक्षा पिन दर्ज करें *'
+                    : 'Anti-Delete Active: Enter security PIN to authorize *'}
+                </span>
+              </label>
+              <input
+                type="password"
+                maxLength={6}
+                autoFocus
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value);
+                  setPinError('');
+                }}
+                placeholder="••••"
+                className="w-full px-3 py-2 text-center font-mono font-bold text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-red-500"
+              />
+              {pinError && (
+                <p className="text-xs text-red-600 font-semibold">{pinError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             {t('cancel')}
           </button>
           <button
             type="button"
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-            className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-md flex items-center gap-1.5 btn-tactile"
+            disabled={isVerifying || (antiDeleteActive && Boolean(targetCred) && pin.length < 4)}
+            onClick={handleConfirmClick}
+            className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 shadow-md flex items-center gap-1.5 btn-tactile"
           >
             <Trash2 className="w-4 h-4" />
-            <span>{language === 'hi' ? 'हाँ, हटाएं' : 'Yes, Delete'}</span>
+            <span>
+              {isVerifying
+                ? language === 'hi'
+                  ? 'सत्यापित हो रहा है...'
+                  : 'Verifying...'
+                : language === 'hi'
+                ? 'हाँ, हटाएं'
+                : 'Yes, Delete'}
+            </span>
           </button>
         </div>
 
