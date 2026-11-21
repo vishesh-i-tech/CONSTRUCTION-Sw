@@ -1209,3 +1209,86 @@ This document tracks all technologies, libraries, and architectural modules used
   - Binds the active workspace (`FEILDLOGG` / `CONSTRUCTION`) to a dedicated ChatGPT session.
   - Provides `npm run review:chatgpt` (backed by `scripts/chatgpt-review.cjs`) to aggregate git status, recent commit diffs, and validation outputs, piping them cleanly to the ChatGPT thread with streaming and non-streaming feedback support.
 - **A short, simple summary:** Connected the local `chatgpt-cli` directly into the project workspace to serve as an independent architect and code reviewer across all implementation phases.
+
+---
+
+## Phase 1 Implementation: Stabilize SiteSaathi Core (Security, Financial Math & Android Hygiene)
+
+### 1. Technology: Offline Progressive Web App (PWA) Engine (`vite-plugin-pwa`, Workbox)
+- **Name of the Technology:** `vite-plugin-pwa` with Auto-Updating Service Worker & Precache
+- **What it does (Role & Purpose):**
+  - Transforms SiteSaathi from a standard web application into a fully installable, offline-capable Progressive Web Application.
+  - Generates a standalone web manifest with theme color, icons, and portrait orientation.
+  - Caches application code, styles, web fonts, and assets so the entire UI functions offline without internet connectivity.
+- **How it works (Under the Hood):**
+  - Integrated into `vite.config.ts` using `registerType: 'autoUpdate'`.
+  - Configures Workbox runtime caching with `CacheFirst` strategies for Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`) with a 365-day expiration.
+  - Generates `dist/sw.js` and `dist/workbox-*.js` during production build, precaching all application bundles, HTML, icons, and images.
+- **A short, simple summary:** Delivers instant app installation and 100% offline startup caching via an automated Workbox Service Worker.
+
+---
+
+### 2. Technology: Native Android Capacitor Plugins (`@capacitor/*`)
+- **Name of the Technology:** Capacitor Native Plugin Suite (`filesystem`, `share`, `app`, `camera`, `geolocation`, `network`)
+- **What it does (Role & Purpose):**
+  - Bridges web frontend capabilities with native Android OS capabilities.
+  - Enables native file export, system share sheet invocation, hardware back-button handling, camera capture, GPS site tracking, and network connectivity monitoring.
+- **How it works (Under the Hood):**
+  - Installed `@capacitor/filesystem` for native Android storage access for PDF and JSON export downloads.
+  - Installed `@capacitor/share` for native Android system share dialogs with WhatsApp and other messaging apps.
+  - Installed `@capacitor/app` to intercept hardware back button presses without exiting the app unintentionally.
+  - Installed `@capacitor/camera` and `@capacitor/geolocation` for geotagged site photo capture.
+  - Installed `@capacitor/network` for reactive offline/online status sensing.
+- **A short, simple summary:** Bridges the web frontend with native Android hardware and operating system capabilities.
+
+---
+
+### 3. Technology: Client-Side Canvas Image Compression (`src/utils/imageCompressor.ts`)
+- **Name of the Technology:** Iterative Canvas Downscaling & JPEG Quality Compression
+- **What it does (Role & Purpose):**
+  - Downscales high-resolution camera captures (e.g. 12MP/5-10MB) before storing them in Dexie IndexedDB or passing them to the OCR engine.
+  - Protects mobile browser IndexedDB quotas from overflowing and eliminates out-of-memory crashes on low-end Android devices.
+- **How it works (Under the Hood):**
+  - Calculates proportional dimensions maintaining aspect ratio, constraining the longest edge to a maximum of 1280px.
+  - Draws the downscaled image onto an in-memory HTML5 Canvas and iterates JPEG encoding quality (`0.85` down to `0.35`) until the payload size is strictly ≤ 200 KB.
+  - Returns a base64 Data URL ready for IndexedDB storage or Tesseract OCR preprocessing.
+- **A short, simple summary:** Compresses multi-megabyte job site photos down to ≤ 200 KB on-device to prevent storage exhaustion and memory crashes.
+
+---
+
+### 4. Technology: Universal Test Suite & CI Automation (`fake-indexeddb`, `tsx --test`, GitHub Actions)
+- **Name of the Technology:** Native Node.js Test Runner with `tsx`, `fake-indexeddb`, and GitHub Actions CI
+- **What it does (Role & Purpose):**
+  - Provides instant, zero-dependency unit and integration testing of database transactions, financial math, contractor isolation, and utility functions.
+  - Automates continuous integration verification on GitHub for every push and pull request.
+- **How it works (Under the Hood):**
+  - Uses `fake-indexeddb/auto` to simulate IndexedDB inside Node.js, allowing Dexie tables, indexes, transactions, and cascade deletions to execute in-memory without a browser.
+  - Tests 52 distinct cases across 6 suites: `financeAndCascade.test.ts`, `ocrProcessor.test.ts`, `dateUtils.test.ts`, `criticalDataSafety.test.ts`, `contractorSelfServiceGoogle.test.ts`, and `backupIsolation.test.ts`.
+  - Configures `.github/workflows/ci.yml` running lint (`oxlint`), tests (`npm run test`), and production build (`npm run build`).
+- **A short, simple summary:** Comprehensive 52-test automated testing suite running in-memory with Dexie/IndexedDB simulation and automated CI validation.
+
+---
+
+### 5. Technology: Dynamic Reminders & Smart Insights Synchronization (`syncDynamicReminders`)
+- **Name of the Technology:** Event-Driven Financial & Equipment Alert Synchronization Engine
+- **What it does (Role & Purpose):**
+  - Automatically identifies operational risks—such as overdue tools dispatched to sites, unpaid client payments on completed projects, and pending expense dues—and alerts the contractor.
+  - Powers the top notification badge and interactive `RemindersModal`.
+- **How it works (Under the Hood):**
+  - Implemented as `db.syncDynamicReminders()` in `src/core/db/database.ts`.
+  - Compares tool return dates against the local calendar date (`YYYY-MM-DD`) to avoid UTC midnight false positives.
+  - Scopes alerts by `contractorId`, preserves user dismissal flags (`isDismissed`), and updates Dexie `reminders` table reactively for `useLiveQuery` consumers.
+- **A short, simple summary:** Proactively alerts contractors to overdue tools, uncollected client balances, and pending bills.
+
+---
+
+### 6. Technology: Safe Devanagari PDF Text Processing (`safePdfText`)
+- **Name of the Technology:** Hindi Construction Vocabulary Normalization for PDF Generation
+- **What it does (Role & Purpose):**
+  - Prevents Devanagari (Hindi) construction text from rendering as garbled question marks (`???`) in jsPDF exports.
+  - Translates common contractor terminology into clean Latin equivalents while preserving numbers, names, and punctuation.
+- **How it works (Under the Hood):**
+  - Defined in `src/utils/reportExporter.ts`. Detects Unicode range `\u0900-\u097F`.
+  - Mappable trade terms (e.g. *राजमिस्त्री* → *Mason*, *हेल्पर* → *Helper*, *सीमेंट बैग* → *Cement Bags*, *सरिया* → *Steel/TMT*, *उधारी* → *Due*, *चुकता* → *Paid*) are replaced before rendering tables in jsPDF.
+- **A short, simple summary:** Eliminates corrupt characters in generated PDF reports by cleanly translating Hindi trade terms.
+
