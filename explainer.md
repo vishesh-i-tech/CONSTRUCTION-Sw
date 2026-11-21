@@ -1180,3 +1180,15 @@ This document tracks all technologies, libraries, and architectural modules used
 
 
 
+---
+
+## Phase 3 Planning: Unified SiteSaathi + FieldLog + TaskSpot Roadmap (`docs/Roadmap.md`)
+
+### 1. Technology: Unified Phased Development & Merge Architecture (`docs/Roadmap.md`)
+- **Name of the Technology:** SiteSaathi + FieldLog + TaskSpot Unified Architecture & 5-Phase Execution Roadmap
+- **What it does (Role & Purpose):**
+  - **Unified Stack Plan:** Consolidates SiteSaathi's React 19 + Vite 8 + Tailwind CSS v4 + Dexie.js + Capacitor 8 frontend with FieldLog's Fastify v5 + Drizzle ORM + Turso (libSQL) backend and durable Cloudflare R2/S3 object storage.
+  - **5-Phase Execution Blueprint:** Breaks down the entire stabilization, backend merge, offline-first sync, TaskSpot procurement/task/escalation workflows, and AI voice + WhatsApp Pro tier into verifiable subphases.
+- **How it works (Under the Hood):**
+  - Documents exact remediation targets for SiteSaathi security/math/Android bugs (Phase 1), FieldLog backend security hardening and R2 migration (Phase 2), Dexie `sync_outbox` and Daily Site Reporting UI merge (Phase 3), Material Request → Purchase → GRN + Site Tasks + FCM Escalations (Phase 4), and Gemini/Sarvam AI Voice + Meta WhatsApp Cloud API + optional DPDP-compliant Face Check (Phase 5).
+- **A short, simple summary:** Created a comprehensive, phase-by-phase engineering roadmap (`docs/Roadmap.md`) to stabilize SiteSaathi, safely merge FieldLog's backend and daily reporting workflows, and deliver TaskSpot operations features.
