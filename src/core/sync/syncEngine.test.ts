@@ -105,4 +105,100 @@ test('Phase 3 Sync Engine & API Client Tests', async (t) => {
 
     unsubscribe();
   });
+
+  await t.test('Phase 4: Dexie v6 supports materialRequests table and outbox queuing', async () => {
+    const requestId = crypto.randomUUID();
+    const materialReq = {
+      id: requestId,
+      clientId: requestId,
+      siteId: 'site-phase4-test',
+      siteName: 'Sector 62 Site',
+      requestedBy: 'user-sup-1',
+      requestedByName: 'Ramesh Supervisor',
+      status: 'pending' as const,
+      urgency: 'urgent' as const,
+      notes: 'Need 50 bags OPC 53 grade cement before 2 PM',
+      itemsJson: [
+        {
+          itemName: 'Ultratech Cement 53',
+          quantity: 50,
+          unit: 'bags',
+        },
+      ],
+      synced: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Store in Dexie
+    await db.materialRequests.put(materialReq);
+    const stored = await db.materialRequests.get(requestId);
+    assert.ok(stored, 'Stored material request should exist in db');
+    assert.equal(stored.itemsJson.length, 1);
+    assert.equal(stored.urgency, 'urgent');
+
+    // Enqueue in sync outbox
+    const outboxId = await enqueueSyncMutation('material_request', 'create', materialReq);
+    assert.ok(outboxId);
+    const outboxItem = await db.syncOutbox.get(outboxId);
+    assert.ok(outboxItem);
+    assert.equal(outboxItem.entity, 'material_request');
+
+    // Clean up
+    await db.materialRequests.delete(requestId);
+    await db.syncOutbox.delete(outboxId);
+  });
+
+  await t.test('Phase 4: Dexie v6 supports siteTasks table and photo proof requirements', async () => {
+    const taskId = crypto.randomUUID();
+    const siteTask = {
+      id: taskId,
+      clientId: taskId,
+      siteId: 'site-phase4-test',
+      title: 'Fix reinforcement spacing at beam B-12',
+      description: 'Rebar spacing should be strictly 150mm c/c',
+      priority: 'high' as const,
+      status: 'in_progress' as const,
+      dueDate: '2026-11-22',
+      synced: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Store in Dexie
+    await db.siteTasks.put(siteTask);
+    const storedTask = await db.siteTasks.get(taskId);
+    assert.ok(storedTask, 'Stored task should exist');
+    assert.equal(storedTask.priority, 'high');
+    assert.equal(storedTask.status, 'in_progress');
+
+    // Update with mandatory completion photo proof
+    const completionPhotoKey = 'proofs/task-123-done.jpg';
+    await db.siteTasks.update(taskId, {
+      status: 'done',
+      completionPhotoKey,
+      completedAt: new Date().toISOString(),
+      completedBy: 'user-sup-1',
+    });
+
+    const completed = await db.siteTasks.get(taskId);
+    assert.ok(completed);
+    assert.equal(completed.status, 'done');
+    assert.equal(completed.completionPhotoKey, completionPhotoKey);
+
+    // Enqueue update in sync outbox
+    const outboxId = await enqueueSyncMutation('site_task', 'update', {
+      id: taskId,
+      status: 'done',
+      completionPhotoKey,
+    });
+    assert.ok(outboxId);
+    const outboxItem = await db.syncOutbox.get(outboxId);
+    assert.ok(outboxItem);
+    assert.equal(outboxItem.entity, 'site_task');
+
+    // Clean up
+    await db.siteTasks.delete(taskId);
+    await db.syncOutbox.delete(outboxId);
+  });
 });

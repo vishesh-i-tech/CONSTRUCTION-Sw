@@ -13,6 +13,7 @@ import {
   Filter,
   Edit2,
   Trash2,
+  ClipboardList,
 } from 'lucide-react';
 
 interface MaterialLogProps {
@@ -21,6 +22,7 @@ interface MaterialLogProps {
   onOpenAddMaterial: () => void;
   onEditMaterial?: (material: MaterialRecord) => void;
   onDeleteMaterial?: (material: MaterialRecord) => void;
+  onOpenMaterialRequests?: () => void;
 }
 
 export const MaterialLog: React.FC<MaterialLogProps> = ({
@@ -29,6 +31,7 @@ export const MaterialLog: React.FC<MaterialLogProps> = ({
   onOpenAddMaterial,
   onEditMaterial,
   onDeleteMaterial,
+  onOpenMaterialRequests,
 }) => {
   const { t, language, tradeConfig } = useTheme();
   const [search, setSearch] = useState('');
@@ -62,14 +65,26 @@ export const MaterialLog: React.FC<MaterialLogProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenAddMaterial}
-          className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-md flex items-center justify-center gap-2 transition-all btn-tactile glow-theme self-start sm:self-auto"
-          style={{ backgroundColor: tradeConfig.primaryColor }}
-        >
-          <Plus className="w-4 h-4" />
-          <span>{language === 'hi' ? 'सामान दर्ज करें' : 'Add Material Entry'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {onOpenMaterialRequests && (
+            <button
+              onClick={onOpenMaterialRequests}
+              className="px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center gap-2 transition-all btn-tactile hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+            >
+              <ClipboardList className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>{language === 'hi' ? 'अनुरोध व चालान (GRN)' : 'Requests & GRN Tracker'}</span>
+            </button>
+          )}
+
+          <button
+            onClick={onOpenAddMaterial}
+            className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-md flex items-center justify-center gap-2 transition-all btn-tactile glow-theme"
+            style={{ backgroundColor: tradeConfig.primaryColor }}
+          >
+            <Plus className="w-4 h-4" />
+            <span>{language === 'hi' ? 'सामान दर्ज करें' : 'Add Material Entry'}</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}

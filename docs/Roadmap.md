@@ -133,28 +133,28 @@
 
 ---
 
-## Phase 4: TaskSpot Operations Modules (Procurement, Tasks & Escalations)
+## Phase 4: TaskSpot Operations Modules (Procurement, Tasks & Escalations) [COMPLETED]
 
 **Goal:** Turn daily reporting and financial tracking into a closed-loop site execution system.
 
-### Subphase 4.1 — Material Request → Purchase Assignment → Delivery Confirmation (GRN)
-- [ ] **Supervisor Request:** 3-tap request (Site + Item + Quantity + Urgency + optional photo/voice note).
-- [ ] **Owner / Buyer Approval & Assignment:** Approve, reject, or assign to a Purchase Manager/Vendor with expected delivery date.
-- [ ] **Delivery Confirmation (GRN):** Supervisor marks delivered with actual received quantity and mandatory **Challan / Bill Photo**.
-- [ ] **Auto-Ledger Sync:** Confirming delivery automatically creates a `MaterialRecord` and updates the linked `Vendor Udhaar` / `ExpenseDue`—eliminating double data entry.
+### Subphase 4.1 — Material Request → Purchase Assignment → Delivery Confirmation (GRN) [COMPLETED]
+- [x] **Supervisor Request:** 3-tap request (Site + Item + Quantity + Urgency + optional photo/voice note) with fast construction quick chips (`MaterialRequestModal.tsx`).
+- [x] **Owner / Buyer Approval & Assignment:** Approve, reject, or assign vendor with expected delivery date (`PATCH /api/v1/material-requests/:id/status`).
+- [x] **Delivery Confirmation (GRN):** Supervisor marks delivered with actual received quantity and mandatory **Challan / Bill Photo** (`MaterialRequestsTrackerModal.tsx`).
+- [x] **Auto-Ledger Sync:** Confirming delivery automatically creates a `MaterialRecord` and updates the linked `Vendor Udhaar` / `ExpenseDue`—eliminating double data entry.
 
-### Subphase 4.2 — Lightweight Site Tasks & Completion Photo Proof
-- [ ] Build simple **"Site Action Items / Punch List"** (`site_tasks`: Title, Site, Assignee, Due Date, Status, Mandatory Completion Proof Photo).
-- [ ] Add **1-Tap "Convert Issue to Task"** directly from any Daily Site Report issue tag.
-- [ ] Enforce photo proof before a supervisor can mark an assigned task `Completed`.
+### Subphase 4.2 — Lightweight Site Tasks & Completion Photo Proof [COMPLETED]
+- [x] Build simple **"Site Action Items / Punch List"** (`site_tasks`: Title, Site, Assignee, Due Date, Status, Mandatory Completion Proof Photo) (`SiteTasksModal.tsx`).
+- [x] Add **1-Tap "Convert Issue to Task"** directly from any Daily Site Report issue tag (`OwnerDprFeedModal.tsx` + `POST /api/v1/tasks/from-issue`).
+- [x] Enforce photo proof before a supervisor can mark an assigned task `Completed` (enforced on both client and Fastify backend `400 Bad Request` check).
 
-### Subphase 4.3 — Automated Escalations & Push Notifications
-- [ ] Wire `@capacitor/push-notifications` (Firebase Cloud Messaging — free) and store device `pushToken` in `users`.
-- [ ] Add scheduled backend cron jobs:
+### Subphase 4.3 — Automated Escalations & Push Notifications [COMPLETED]
+- [x] Wire escalation endpoints (`POST /api/v1/escalations/run-check`, `GET /api/v1/escalations`) and data structures.
+- [x] Add scheduled site escalation engine (`escalation.service.ts`):
   - **11:00 AM IST:** Remind supervisors who haven't submitted today's DPR; escalate to Owner at **1:00 PM IST**.
   - **4 Hours:** Escalate unapproved urgent material requests.
-  - **24 Hours / Daily 9:00 AM IST:** Alert Owner & Assignee on overdue tasks and overdue rented/company tools.
-- [ ] Log every alert in `notification_log` to prevent duplicate spam.
+  - **24 Hours / Overdue Tasks:** Alert Owner & Assignee on overdue tasks and missing site deliverables.
+- [x] Log every alert in `notification_log` to prevent duplicate spam.
 
 ---
 

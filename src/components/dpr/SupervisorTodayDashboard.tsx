@@ -14,17 +14,23 @@ import {
   RefreshCw,
   Camera,
   Mic,
+  Package,
+  CheckSquare,
 } from 'lucide-react';
 import { SupervisorDprModal } from './SupervisorDprModal';
 
 interface SupervisorTodayDashboardProps {
   assignedSites: Site[];
   onOpenDprModal: (siteId?: string) => void;
+  onOpenMaterialRequest?: () => void;
+  onOpenTasks?: () => void;
 }
 
 export const SupervisorTodayDashboard: React.FC<SupervisorTodayDashboardProps> = ({
   assignedSites,
   onOpenDprModal,
+  onOpenMaterialRequest,
+  onOpenTasks,
 }) => {
   const { language } = useTheme();
   const isHi = language === 'hi';
@@ -94,12 +100,35 @@ export const SupervisorTodayDashboard: React.FC<SupervisorTodayDashboardProps> =
           <button
             type="button"
             onClick={() => onOpenDprModal()}
-            className="w-full py-3.5 px-4 rounded-2xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 hover:bg-primary/90 flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+            className="w-full py-3.5 px-4 rounded-2xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 hover:bg-primary/90 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
           >
             <PlusCircle className="w-5 h-5" />
             <span>{isHi ? 'आज की रिपोर्ट दर्ज करें' : "Submit Today's Report"}</span>
           </button>
         )}
+
+        <div className="grid grid-cols-2 gap-2.5 mt-3">
+          {onOpenMaterialRequest && (
+            <button
+              type="button"
+              onClick={onOpenMaterialRequest}
+              className="py-2.5 px-3 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-raised font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-xs cursor-pointer"
+            >
+              <Package className="w-4 h-4 text-amber-500" />
+              <span>{isHi ? 'सामान मंगाएं' : 'Request Material'}</span>
+            </button>
+          )}
+          {onOpenTasks && (
+            <button
+              type="button"
+              onClick={onOpenTasks}
+              className="py-2.5 px-3 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-raised font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-xs cursor-pointer"
+            >
+              <CheckSquare className="w-4 h-4 text-emerald-500" />
+              <span>{isHi ? 'साइट टास्क' : 'Punch Tasks'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sites Status List */}

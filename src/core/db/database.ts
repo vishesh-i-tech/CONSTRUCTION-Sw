@@ -16,6 +16,8 @@ import type {
   IssueType,
   RecordAcknowledgement,
   SyncOutboxItem,
+  MaterialRequest,
+  SiteTask,
 } from '../../types/index.ts';
 import {
   SEED_ACCOUNT,
@@ -66,6 +68,9 @@ export class SiteSaathiDatabase extends Dexie {
   recordAcknowledgements!: EntityTable<RecordAcknowledgement, 'id'>;
   syncOutbox!: EntityTable<SyncOutboxItem, 'id'>;
   syncMeta!: EntityTable<{ key: string; value: string }, 'key'>;
+  // Phase 4 TaskSpot Tables
+  materialRequests!: EntityTable<MaterialRequest, 'id'>;
+  siteTasks!: EntityTable<SiteTask, 'id'>;
 
   constructor() {
     super('SiteSaathiDB');
@@ -93,6 +98,10 @@ export class SiteSaathiDatabase extends Dexie {
       recordAcknowledgements: 'id, recordId, ownerId, seenAt',
       syncOutbox: 'id, entity, action, status, createdAt',
       syncMeta: 'key',
+    });
+    this.version(6).stores({
+      materialRequests: 'id, siteId, requestedBy, status, urgency, clientId, createdAt',
+      siteTasks: 'id, siteId, assignedTo, status, priority, dueDate, clientId, createdAt',
     });
   }
 

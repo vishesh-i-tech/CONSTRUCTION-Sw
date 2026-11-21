@@ -8,6 +8,8 @@ import {
   ClipboardCheck,
   RefreshCw,
   CloudCheck,
+  CheckSquare,
+  Package,
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { subscribeSyncStatus } from '../../core/sync/syncEngine';
@@ -29,6 +31,8 @@ interface HeaderProps {
   onOpenTeamModal?: () => void;
   onOpenIssueChipsModal?: () => void;
   onOpenSupervisorDpr?: () => void;
+  onOpenSiteTasks?: () => void;
+  onOpenMaterialRequests?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,6 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenDprFeed,
   onOpenTeamModal,
   onOpenSupervisorDpr,
+  onOpenSiteTasks,
+  onOpenMaterialRequests,
 }) => {
   const { language } = useTheme();
 
@@ -151,6 +157,28 @@ export const Header: React.FC<HeaderProps> = ({
               title={language === 'hi' ? 'दैनिक रिपोर्ट फ़ीड' : 'Daily Reports Feed'}
             >
               <ClipboardCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </button>
+          )}
+
+          {/* Quick Action: Punch List Tasks */}
+          {onOpenSiteTasks && (
+            <button
+              onClick={onOpenSiteTasks}
+              className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+              title={language === 'hi' ? 'साइट टास्क व पंच लिस्ट' : 'Punch List Tasks'}
+            >
+              <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </button>
+          )}
+
+          {/* Quick Action: Material Requests & GRN */}
+          {onOpenMaterialRequests && (
+            <button
+              onClick={onOpenMaterialRequests}
+              className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+              title={language === 'hi' ? 'सामान अनुरोध व डिलीवरी (GRN)' : 'Material Requests & GRN'}
+            >
+              <Package className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </button>
           )}
 

@@ -283,7 +283,7 @@ export interface SupervisorUser {
 
 export interface SyncOutboxItem {
   id: string;
-  entity: 'daily_record' | 'labour' | 'material' | 'payment' | 'due' | 'task';
+  entity: 'daily_record' | 'labour' | 'material' | 'payment' | 'due' | 'task' | 'material_request' | 'site_task';
   action: 'create' | 'update' | 'delete';
   payload: any;
   mediaBlobs?: { kind: 'photo' | 'audio'; siteId: string; mimeType: string; dataUrl: string }[];
@@ -291,5 +291,63 @@ export interface SyncOutboxItem {
   retryCount: number;
   errorMessage?: string;
   createdAt: string;
+}
+
+// Phase 4 TaskSpot Operations Models (Material Requests & Site Tasks)
+
+export interface MaterialRequestItem {
+  itemName: string;
+  quantity: number;
+  unit: string;
+  estimatedRate?: number;
+}
+
+export interface MaterialRequest {
+  id: string;
+  clientId: string;
+  organizationId?: string;
+  siteId: string;
+  siteName?: string;
+  requestedBy: string;
+  requestedByName?: string;
+  itemsJson: MaterialRequestItem[];
+  urgency: 'low' | 'normal' | 'urgent';
+  status: 'pending' | 'approved' | 'rejected' | 'fulfilled';
+  notes?: string;
+  vendorId?: string;
+  vendorName?: string;
+  expectedDeliveryDate?: string;
+  fulfilledAt?: string;
+  challanPhotoKey?: string;
+  challanPhotoUrl?: string;
+  actualReceivedQuantity?: number;
+  unitCost?: number;
+  totalCost?: number;
+  synced?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface SiteTask {
+  id: string;
+  clientId: string;
+  organizationId?: string;
+  siteId: string;
+  siteName?: string;
+  title: string;
+  description?: string;
+  assignedTo?: string;
+  assignedToName?: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'todo' | 'in_progress' | 'done';
+  dueDate?: string;
+  completionPhotoKey?: string;
+  completionPhotoUrl?: string;
+  completedAt?: string;
+  completedBy?: string;
+  issueId?: string;
+  synced?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 

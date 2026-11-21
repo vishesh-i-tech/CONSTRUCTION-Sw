@@ -13,6 +13,9 @@ import { siteRoutes } from './routes/sites.js';
 import { devStorageRoutes } from './routes/devStorage.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { recordRoutes } from './routes/records.js';
+import { materialRequestRoutes } from './routes/materialRequests.js';
+import { taskRoutes } from './routes/tasks.js';
+import { escalationRoutes } from './routes/escalations.js';
 
 dotenv.config();
 
@@ -63,6 +66,9 @@ export async function buildServer() {
   }
   await server.register(uploadRoutes);
   await server.register(recordRoutes);
+  await server.register(materialRequestRoutes);
+  await server.register(taskRoutes);
+  await server.register(escalationRoutes);
 
   // Root welcome route
   server.get('/', async () => {

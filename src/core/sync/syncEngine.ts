@@ -4,6 +4,8 @@ import {
   apiPresignUpload,
   apiUploadToR2,
   apiSubmitDailyRecord,
+  apiCreateMaterialRequest,
+  apiCreateTask,
 } from '../../services/apiClient';
 
 let isProcessing = false;
@@ -49,7 +51,7 @@ export function dataUrlToBlob(dataUrl: string): Blob {
  * Enqueues a mutation into the persistent Dexie outbox and triggers sync attempt.
  */
 export async function enqueueSyncMutation(
-  entity: 'daily_record' | 'labour' | 'material' | 'payment' | 'due' | 'task',
+  entity: SyncOutboxItem['entity'],
   action: 'create' | 'update' | 'delete',
   payload: any,
   mediaBlobs?: { kind: 'photo' | 'audio'; siteId: string; mimeType: string; dataUrl: string }[]
@@ -160,6 +162,40 @@ export async function processSyncOutbox(): Promise<{ processed: number; failed: 
               });
               failed++;
             }
+          }
+        } else if (item.entity === 'material_request') {
+          const payload = { ...item.payload };
+          const res = await apiCreateMaterialRequest(payload);
+          if (res.data?.materialRequest) {
+            const local = await db.materialRequests.where('clientId').equals(payload.clientId).first();
+            if (local) {
+              await db.materialRequests.update(local.id, { synced: true });
+            }
+            await db.syncOutbox.delete(item.id);
+            processed++;
+          } else {
+            await db.syncOutbox.update(item.id, {
+              retryCount: item.retryCount + 1,
+              errorMessage: res.error || 'Failed to sync material request',
+            });
+            failed++;
+          }
+        } else if (item.entity === 'site_task') {
+          const payload = { ...item.payload };
+          const res = await apiCreateTask(payload);
+          if (res.data?.task) {
+            const local = await db.siteTasks.where('clientId').equals(payload.clientId).first();
+            if (local) {
+              await db.siteTasks.update(local.id, { synced: true });
+            }
+            await db.syncOutbox.delete(item.id);
+            processed++;
+          } else {
+            await db.syncOutbox.update(item.id, {
+              retryCount: item.retryCount + 1,
+              errorMessage: res.error || 'Failed to sync site task',
+            });
+            failed++;
           }
         }
       } catch (err: any) {

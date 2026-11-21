@@ -53,6 +53,9 @@ import { SupervisorTodayDashboard } from './components/dpr/SupervisorTodayDashbo
 import { OwnerDprFeedModal } from './components/dpr/OwnerDprFeedModal';
 import { OwnerIssueChipsModal } from './components/dpr/OwnerIssueChipsModal';
 import { TeamManagementModal } from './components/team/TeamManagementModal';
+import { MaterialRequestModal } from './components/materials/MaterialRequestModal';
+import { MaterialRequestsTrackerModal } from './components/materials/MaterialRequestsTrackerModal';
+import { SiteTasksModal } from './components/tasks/SiteTasksModal';
 
 export const App: React.FC = () => {
   const { trade, setTrade, language, setLanguage, t, tradeConfig } = useTheme();
@@ -93,6 +96,11 @@ export const App: React.FC = () => {
   const [isOwnerDprFeedOpen, setIsOwnerDprFeedOpen] = useState(false);
   const [isTeamManagementOpen, setIsTeamManagementOpen] = useState(false);
   const [isOwnerIssueChipsOpen, setIsOwnerIssueChipsOpen] = useState(false);
+
+  // FieldLog Phase 4 Operations & Tasks State
+  const [isMaterialRequestOpen, setIsMaterialRequestOpen] = useState(false);
+  const [isMaterialTrackerOpen, setIsMaterialTrackerOpen] = useState(false);
+  const [isSiteTasksOpen, setIsSiteTasksOpen] = useState(false);
 
   // Selected site for drilldown modal
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
@@ -540,6 +548,8 @@ export const App: React.FC = () => {
               setSelectedSiteForDpr(null);
               setIsSupervisorDprOpen(true);
             }}
+            onOpenSiteTasks={() => setIsSiteTasksOpen(true)}
+            onOpenMaterialRequests={() => setIsMaterialTrackerOpen(true)}
           />
 
           {/* Main Container */}
@@ -554,6 +564,8 @@ export const App: React.FC = () => {
                 setSelectedSiteForDpr(siteId ? sites.find((s) => s.id === siteId) || null : null);
                 setIsSupervisorDprOpen(true);
               }}
+              onOpenMaterialRequest={() => setIsMaterialRequestOpen(true)}
+              onOpenTasks={() => setIsSiteTasksOpen(true)}
             />
           ) : (
             <DashboardOverview
@@ -624,6 +636,7 @@ export const App: React.FC = () => {
           <MaterialLog
             materials={materials}
             sites={sites}
+            onOpenMaterialRequests={() => setIsMaterialTrackerOpen(true)}
             onOpenAddMaterial={() => {
               setTargetSiteIdForModal(undefined);
               setIsAddMaterialModalOpen(true);
@@ -877,6 +890,8 @@ export const App: React.FC = () => {
         onOpenAddMaterial={() => setIsAddMaterialModalOpen(true)}
         onOpenAddMachinery={() => setIsAddMachineryModalOpen(true)}
         onOpenAddDue={() => setIsAddDueModalOpen(true)}
+        onOpenMaterialRequest={() => setIsMaterialRequestOpen(true)}
+        onOpenSiteTask={() => setIsSiteTasksOpen(true)}
       />
 
       {/* Reminders Modal */}
@@ -1000,6 +1015,37 @@ export const App: React.FC = () => {
         isOpen={isTeamManagementOpen}
         onClose={() => setIsTeamManagementOpen(false)}
         sites={sites}
+      />
+
+      {/* Phase 4: Material Request 3-Tap Modal */}
+      <MaterialRequestModal
+        isOpen={isMaterialRequestOpen}
+        onClose={() => setIsMaterialRequestOpen(false)}
+        assignedSites={sites}
+        onSubmitted={() => {
+          showToast(
+            language === 'hi'
+              ? 'सामान अनुरोध सफलतापूर्वक दर्ज किया गया!'
+              : 'Material request submitted successfully!'
+          );
+        }}
+      />
+
+      {/* Phase 4: Material Requests & Delivery (GRN) Tracker Modal */}
+      <MaterialRequestsTrackerModal
+        isOpen={isMaterialTrackerOpen}
+        onClose={() => setIsMaterialTrackerOpen(false)}
+        sites={sites}
+        userRole={currentAccount?.role || 'owner'}
+        onOpenNewRequest={() => setIsMaterialRequestOpen(true)}
+      />
+
+      {/* Phase 4: Punch-List Site Tasks Modal */}
+      <SiteTasksModal
+        isOpen={isSiteTasksOpen}
+        onClose={() => setIsSiteTasksOpen(false)}
+        sites={sites}
+        userRole={currentAccount?.role || 'owner'}
       />
 
       {/* Safety Confirmation Modal for Deletions */}

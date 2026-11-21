@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../core/db/database';
 import { Site, DailyRecord, IssueType } from '../../types';
 import { useTheme } from '../../core/theme/ThemeContext';
-import { apiAcknowledgeRecord, apiGetTodayRecords } from '../../services/apiClient';
+import { apiAcknowledgeRecord, apiGetTodayRecords, apiConvertIssueToTask } from '../../services/apiClient';
 import {
   X,
   Filter,
@@ -22,6 +22,8 @@ import {
   Camera,
   Mic,
   Maximize2,
+  Plus,
+  RefreshCw,
 } from 'lucide-react';
 
 interface OwnerDprFeedModalProps {
@@ -56,6 +58,7 @@ export const OwnerDprFeedModal: React.FC<OwnerDprFeedModalProps> = ({
 
   const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [convertingMap, setConvertingMap] = useState<Record<string, 'loading' | 'done'>>({});
 
   // Live query from local Dexie database
   const allLocalRecords = useLiveQuery(
@@ -124,6 +127,55 @@ export const OwnerDprFeedModal: React.FC<OwnerDprFeedModalProps> = ({
       console.warn('Acknowledgement error:', err);
     } finally {
       setAcknowledgingId(null);
+    }
+  };
+
+  const handleConvertIssue = async (siteId: string, issueTitle: string, key: string) => {
+    setConvertingMap((prev) => ({ ...prev, [key]: 'loading' }));
+    try {
+      const res = await apiConvertIssueToTask({
+        siteId,
+        issueTitle,
+        priority: 'high',
+      });
+      if (res.data?.task) {
+        await db.siteTasks.put({
+          ...res.data.task,
+          synced: true,
+        });
+      } else {
+        const taskId = crypto.randomUUID();
+        await db.siteTasks.put({
+          id: taskId,
+          clientId: taskId,
+          siteId,
+          title: issueTitle,
+          description: `Created from DPR issue: ${issueTitle}`,
+          priority: 'high',
+          status: 'todo',
+          synced: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      setConvertingMap((prev) => ({ ...prev, [key]: 'done' }));
+    } catch (err) {
+      console.error('Error converting issue to task:', err);
+      // Offline fallback
+      const taskId = crypto.randomUUID();
+      await db.siteTasks.put({
+        id: taskId,
+        clientId: taskId,
+        siteId,
+        title: issueTitle,
+        description: `Created from DPR issue: ${issueTitle}`,
+        priority: 'high',
+        status: 'todo',
+        synced: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      setConvertingMap((prev) => ({ ...prev, [key]: 'done' }));
     }
   };
 
@@ -314,18 +366,51 @@ export const OwnerDprFeedModal: React.FC<OwnerDprFeedModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Issue Chips Badges */}
+                  {/* Issue Chips Badges with 1-Tap Convert to Task */}
                   {record.issues && record.issues.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {record.issues.map((issue, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-1"
-                        >
-                          <span>{issue.icon || '⚠️'}</span>
-                          <span>{isHi ? issue.labelHi : issue.labelEn}</span>
-                        </span>
-                      ))}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {record.issues.map((issue, idx) => {
+                        const issueKey = `${record.id}-${idx}`;
+                        const issueTitle = isHi ? issue.labelHi : issue.labelEn;
+                        const convertState = convertingMap[issueKey];
+
+                        return (
+                          <div
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-red-500/10 border border-red-500/20"
+                          >
+                            <span className="text-xs font-semibold text-red-500 flex items-center gap-1 px-1">
+                              <span>{issue.icon || '⚠️'}</span>
+                              <span>{issueTitle}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleConvertIssue(record.siteId, issueTitle, issueKey)}
+                              disabled={convertState === 'loading' || convertState === 'done'}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                convertState === 'done'
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-100 shadow-xs'
+                              }`}
+                              title={isHi ? 'इस समस्या का टास्क बनाएं' : 'Convert issue to site task'}
+                            >
+                              {convertState === 'loading' ? (
+                                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                              ) : convertState === 'done' ? (
+                                <>
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  <span>{isHi ? 'टास्क बना' : 'Task Added'}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-2.5 h-2.5" />
+                                  <span>{isHi ? '+ टास्क' : '+ Task'}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 

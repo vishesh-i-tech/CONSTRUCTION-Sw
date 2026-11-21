@@ -34,6 +34,9 @@ This document tracks all technologies, libraries, and architectural modules used
 | **Owner DPR Review Feed** | Monitoring & Audit | Chronological report audit with voice playback & double-blue ticks |
 | **Owner Issue Chips Customizer** | Configuration | Dynamic on-site issue classification with 8-chip cognitive guard |
 | **Supervisor PIN Auth System** | Identity & Access | Zero-email phone + 4-digit PIN authentication with offline caching |
+| **Material Indent & GRN Auto-Ledger** | Procurement & Operations | Closed-loop 3-tap request, vendor assignment & delivery with challan photo |
+| **Punch-List Tasks & Photo Proof Engine** | Quality & Punch List | Actionable task tracking with mandatory photo proof verification |
+| **Automated Site Escalation Engine** | Monitoring & Alerts | Scheduled site scanning for missing DPRs, urgent indents & overdue tasks |
 
 ---
 
@@ -1464,6 +1467,50 @@ This document tracks all technologies, libraries, and architectural modules used
   - Upon first login, credentials are verified via API and cached locally with PBKDF2 salt hashing, allowing subsequent logins to work 100% offline.
   - Supervisors receive scoped permissions, seeing only their assigned job sites and today's status dashboard.
 - **A short, simple summary:** Phone + 4-digit PIN authentication designed for site supervisors with offline login support and owner site controls.
+
+---
+
+### 19. Technology: Material Indent & GRN Auto-Ledger Pipeline (`MaterialRequestModal.tsx`, `MaterialRequestsTrackerModal.tsx`, `backend/src/routes/materialRequests.ts`)
+- **Name of the Technology:** Closed-Loop Procurement & GRN Auto-Ledger Pipeline
+- **What it does (Role & Purpose):**
+  - Enables supervisors to submit 3-tap material requests from site, provides owners with approval & vendor assignment controls, and captures Goods Receipt Note (GRN) delivery confirmations with mandatory bill/challan photos.
+  - Automatically synchronizes delivery confirmations into `materials` and `expense_dues` tables without duplicate manual ledger entries.
+- **How it works (Under the Hood):**
+  - Supervisor creates request with item, quantity, unit, urgency, and optional note; queued in Dexie `materialRequests` and synced via `syncEngine`.
+  - Owner approves/rejects request via `PATCH /api/v1/material-requests/:id/status`.
+  - Upon delivery, receiver confirms actual quantity, unit cost, vendor, payment status (paid, pending, partial), and takes a mandatory photo of the delivery challan.
+  - Backend `POST /api/v1/material-requests/:id/fulfill` and frontend tracker atomically insert records into `materials` and, for credit purchases, create linked `expense_dues` rows.
+- **A short, simple summary:** 3-tap site procurement flow linking request, owner approval, and challan delivery with zero-double-entry ledger updates.
+
+---
+
+### 20. Technology: Punch-List Site Tasks & Mandatory Photo Proof Engine (`SiteTasksModal.tsx`, `backend/src/routes/tasks.ts`)
+- **Name of the Technology:** Actionable Site Tasks & Mandatory Photographic Proof Engine
+- **What it does (Role & Purpose):**
+  - Manages site action items, snag lists, and defect rectifications with strict photographic proof required before any task can be marked "Done".
+  - Includes 1-tap conversion of daily bottleneck issue chips from Daily Site Reports into assigned tasks.
+- **How it works (Under the Hood):**
+  - Tasks are stored locally in Dexie `siteTasks` and in backend `site_tasks` table.
+  - Supports priority levels (`low`, `medium`, `high`) and states (`todo`, `in_progress`, `done`).
+  - When marking a task "Done", both client validation and backend API (`PATCH /api/v1/tasks/:id/status`) strictly require `completionPhotoKey` or base64 photo data. Attempting to mark done without photographic proof returns a `400 Bad Request`.
+  - DPR issue conversion (`POST /api/v1/tasks/from-issue`) allows owners to convert any recorded issue chip into a tracked site task in 1 tap directly from the review feed.
+- **A short, simple summary:** Site punch-list management that strictly enforces photographic evidence before work can be marked completed.
+
+---
+
+### 21. Technology: Automated Site Escalation & Alert Architecture (`escalation.service.ts`, `backend/src/routes/escalations.ts`)
+- **Name of the Technology:** Automated Site Escalation & Proactive Notification Engine
+- **What it does (Role & Purpose):**
+  - Continuously monitors active sites for operational bottlenecks: missing daily reports, urgent material requests stalled without approval (>4 hours), and overdue punch tasks (>24 hours).
+  - Emits deduplicated alert notifications to owners and supervisors to keep project milestones on schedule.
+- **How it works (Under the Hood):**
+  - `escalation.service.ts` runs automated multi-check routines across active sites.
+  - Queries active sites that have no `daily_records` submitted for today's IST date.
+  - Scans pending `material_requests` flagged `urgency: 'urgent'` older than 4 hours without owner approval.
+  - Scans `site_tasks` where `status != 'done'` and `dueDate < today`.
+  - Writes deduplicated alerts into `notification_log` avoiding repetitive notification spam, and delivers active notifications via `GET /api/v1/escalations`.
+- **A short, simple summary:** Proactive monitoring engine alerting contractors to missing DPRs, urgent material bottlenecks, and overdue site tasks.
+
 
 
 

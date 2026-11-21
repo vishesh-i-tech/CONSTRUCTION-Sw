@@ -443,3 +443,123 @@ export async function apiAcknowledgeRecord(recordId: string) {
     method: 'POST',
   });
 }
+
+// -------------------------------------------------------------
+// Phase 4 TaskSpot: Material Requests, Site Tasks & Escalations
+// -------------------------------------------------------------
+
+export async function apiCreateMaterialRequest(data: {
+  siteId: string;
+  itemsJson: { itemName: string; quantity: number; unit: string; estimatedRate?: number }[];
+  urgency?: 'low' | 'normal' | 'urgent';
+  notes?: string;
+  clientId?: string;
+}) {
+  return apiRequest<{ message: string; materialRequest: any }>('/api/v1/material-requests', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiGetMaterialRequests(params?: { siteId?: string; status?: string }) {
+  const query = new URLSearchParams();
+  if (params?.siteId) query.set('siteId', params.siteId);
+  if (params?.status) query.set('status', params.status);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest<{ materialRequests: any[] }>(`/api/v1/material-requests${qStr}`);
+}
+
+export async function apiUpdateMaterialRequestStatus(
+  requestId: string,
+  data: { status: 'approved' | 'rejected'; vendorId?: string; expectedDeliveryDate?: string; notes?: string }
+) {
+  return apiRequest<{ message: string; status: string }>(`/api/v1/material-requests/${requestId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiFulfillMaterialRequest(
+  requestId: string,
+  data: {
+    actualQuantity?: number;
+    challanPhotoKey?: string;
+    challanPhotoUrl?: string;
+    vendorId?: string;
+    unitCost?: number;
+    totalCost?: number;
+    notes?: string;
+    paymentStatus?: 'paid' | 'pending' | 'partial';
+    paidAmount?: number;
+  }
+) {
+  return apiRequest<{ message: string; fulfilledAt: string; createdMaterialId: string }>(
+    `/api/v1/material-requests/${requestId}/fulfill`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+export async function apiCreateTask(data: {
+  siteId: string;
+  title: string;
+  description?: string;
+  assignedTo?: string;
+  priority?: 'low' | 'medium' | 'high';
+  dueDate?: string;
+}) {
+  return apiRequest<{ message: string; task: any }>('/api/v1/tasks', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiGetTasks(params?: { siteId?: string; status?: string; assignedTo?: string }) {
+  const query = new URLSearchParams();
+  if (params?.siteId) query.set('siteId', params.siteId);
+  if (params?.status) query.set('status', params.status);
+  if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest<{ tasks: any[] }>(`/api/v1/tasks${qStr}`);
+}
+
+export async function apiUpdateTaskStatus(
+  taskId: string,
+  data: {
+    status: 'todo' | 'in_progress' | 'done';
+    completionPhotoKey?: string;
+    completionPhotoUrl?: string;
+    notes?: string;
+  }
+) {
+  return apiRequest<{ message: string; taskId: string; status: string }>(`/api/v1/tasks/${taskId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiConvertIssueToTask(data: {
+  siteId: string;
+  issueTitle: string;
+  issueDescription?: string;
+  priority?: 'low' | 'medium' | 'high';
+  dueDate?: string;
+  assignedTo?: string;
+}) {
+  return apiRequest<{ message: string; task: any }>('/api/v1/tasks/from-issue', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiRunEscalationCheck() {
+  return apiRequest<{ message: string; summary: any }>('/api/v1/escalations/run-check', {
+    method: 'POST',
+  });
+}
+
+export async function apiGetNotifications() {
+  return apiRequest<{ notifications: any[] }>('/api/v1/escalations');
+}

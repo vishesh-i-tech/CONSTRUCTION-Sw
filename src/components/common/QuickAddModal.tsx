@@ -12,6 +12,8 @@ import {
   X,
   Plus,
   Sparkles,
+  CheckSquare,
+  ShoppingBag,
 } from 'lucide-react';
 
 interface QuickAddModalProps {
@@ -25,6 +27,8 @@ interface QuickAddModalProps {
   onOpenAddMaterial: () => void;
   onOpenAddMachinery: () => void;
   onOpenAddDue: () => void;
+  onOpenMaterialRequest?: () => void;
+  onOpenSiteTask?: () => void;
 }
 
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({
@@ -38,6 +42,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   onOpenAddMaterial,
   onOpenAddMachinery,
   onOpenAddDue,
+  onOpenMaterialRequest,
+  onOpenSiteTask,
 }) => {
   const { t, language, tradeConfig } = useTheme();
 
@@ -64,6 +70,28 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       onClick: () => {
         onClose();
         onOpenOcrModal();
+      },
+    },
+    {
+      title: language === 'hi' ? 'सामान का अनुरोध (इंडेंट)' : 'Material Request Indent',
+      subtitle: language === 'hi' ? 'सुपरवाइज़र द्वारा सामान मंगाना' : 'Fast 3-tap site supply indent',
+      icon: ShoppingBag,
+      color: '#EA580C',
+      isSpecial: true,
+      onClick: () => {
+        onClose();
+        onOpenMaterialRequest?.();
+      },
+    },
+    {
+      title: language === 'hi' ? 'साइट टास्क व पंच लिस्ट' : 'Punch-List Site Task',
+      subtitle: language === 'hi' ? 'साइट पर काम या कमी ठीक करने का कार्य' : 'Actionable task with photo proof',
+      icon: CheckSquare,
+      color: '#0D9488',
+      isSpecial: true,
+      onClick: () => {
+        onClose();
+        onOpenSiteTask?.();
       },
     },
     {
