@@ -68,35 +68,35 @@
 
 ---
 
-## Phase 2: Merge & Harden FieldLog Backend + Cloud Object Storage
+## Phase 2: Merge & Harden FieldLog Backend + Cloud Object Storage [COMPLETED]
 
 **Goal:** Bring `FieldLog/backend` (Fastify v5 + Drizzle ORM + Turso) into this repository, close all 5 critical security vulnerabilities, replace ephemeral disk uploads with durable object storage, and extend the schema for unified SiteSaathi + TaskSpot data.
 
-### Subphase 2.1 — Monorepo Consolidation
-- [ ] Move `FieldLog/backend` into `backend/` within this repository (configuring root `npm` workspaces or unified scripts for `frontend` + `backend`).
-- [ ] Retire duplicate `FieldLog/mobile` (Expo/RN) UI after verifying all screens/services are mapped for Phase 3 porting.
-- [ ] Configure `render.yaml` and environment validation (`zod` env schema failing fast if `JWT_SECRET`, `TURSO_DATABASE_URL`, or R2 credentials are missing in production).
+### Subphase 2.1 — Monorepo Consolidation [COMPLETED]
+- [x] Move `FieldLog/backend` into `backend/` within this repository (configuring root `npm` workspaces or unified scripts for `frontend` + `backend`).
+- [x] Retire duplicate `FieldLog/mobile` (Expo/RN) UI after verifying all screens/services are mapped for Phase 3 porting.
+- [x] Configure `render.yaml` and environment validation (`zod` env schema failing fast if `JWT_SECRET`, `TURSO_DATABASE_URL`, or R2 credentials are missing in production).
 
-### Subphase 2.2 — Critical Backend Security Hardening
-- [ ] **Close Open Org & Signup Exploits (`auth.ts`):** Remove public `GET /api/v1/auth/organizations` and public `POST /api/v1/auth/supervisor/signup`; allow supervisor creation strictly by authenticated Owners (or signed, expiring org invite tokens).
-- [ ] **Close Unauthenticated Storage & IssueType Bypasses (`devStorage.ts`, `issueTypes.ts`):** Remove unauthenticated `devStorage` routes in production; remove `x-organization-id` header fallback in `issueTypes.ts` and enforce `authenticate` + `requireOwner` on mutations.
-- [ ] **Enforce Site-Assignment RBAC (`records.ts`):** Remove auto-assignment on `POST /records` for supervisors; enforce `siteAssignments` checks on `GET /records/:id` and `GET /sites/:siteId/records`; scope `clientId` idempotency checks by `organizationId`.
-- [ ] **Auth Hardening & Rate Limiting:** Normalize Indian phone numbers (10-digit E.164 normalization), add `@fastify/rate-limit` on `/auth/supervisor/login` (4-digit PIN brute-force protection) and `/auth/owner/login`, restrict production CORS to explicit allowed origins + Capacitor schemes, and implement real password/PIN reset flows (Owner reset for supervisors; OTP/email or recovery key for owners).
-- [ ] **IST Date Utility:** Replace UTC `new Date().toISOString().split('T')[0]` with an `Asia/Kolkata` (`IST`) date helper on all backend "today" queries.
+### Subphase 2.2 — Critical Backend Security Hardening [COMPLETED]
+- [x] **Close Open Org & Signup Exploits (`auth.ts`):** Remove public `GET /api/v1/auth/organizations` and public `POST /api/v1/auth/supervisor/signup`; allow supervisor creation strictly by authenticated Owners (or signed, expiring org invite tokens).
+- [x] **Close Unauthenticated Storage & IssueType Bypasses (`devStorage.ts`, `issueTypes.ts`):** Remove unauthenticated `devStorage` routes in production; remove `x-organization-id` header fallback in `issueTypes.ts` and enforce `authenticate` + `requireOwner` on mutations.
+- [x] **Enforce Site-Assignment RBAC (`records.ts`):** Remove auto-assignment on `POST /records` for supervisors; enforce `siteAssignments` checks on `GET /records/:id` and `GET /sites/:siteId/records`; scope `clientId` idempotency checks by `organizationId`.
+- [x] **Auth Hardening & Rate Limiting:** Normalize Indian phone numbers (10-digit E.164 normalization), add `@fastify/rate-limit` on `/auth/supervisor/login` (4-digit PIN brute-force protection) and `/auth/owner/login`, restrict production CORS to explicit allowed origins + Capacitor schemes, and implement real password/PIN reset flows (Owner reset for supervisors; OTP/email or recovery key for owners).
+- [x] **IST Date Utility:** Replace UTC `new Date().toISOString().split('T')[0]` with an `Asia/Kolkata` (`IST`) date helper on all backend "today" queries.
 
-### Subphase 2.3 — Durable Cloud Storage & Server-Side Anti-Fake Verification
-- [ ] **Cloudflare R2 / S3 Presigned Uploads (`storage/index.ts`, `uploads.ts`):** Implement S3-compatible presigned `PUT` & signed `GET` URLs for Cloudflare R2 (10 GB free tier, zero egress), supporting both compressed JPEG/WebP photos and real `audio/webm` / `audio/mp4` / `audio/aac` voice notes.
-- [ ] **Server-Side Anti-Fake Engine (`records.ts`):**
+### Subphase 2.3 — Durable Cloud Storage & Server-Side Anti-Fake Verification [COMPLETED]
+- [x] **Cloudflare R2 / S3 Presigned Uploads (`storage/index.ts`, `uploads.ts`):** Implement S3-compatible presigned `PUT` & signed `GET` URLs for Cloudflare R2 (10 GB free tier, zero egress), supporting both compressed JPEG/WebP photos and real `audio/webm` / `audio/mp4` / `audio/aac` voice notes.
+- [x] **Server-Side Anti-Fake Engine (`records.ts`):**
   - Compute Haversine distance between photo GPS coordinates and `site.latitude`/`longitude` -> flag `distance_warning` if >500m.
   - Compare `capturedAt` vs server `receivedAt` -> flag `time_skew` if delta >15 minutes.
   - Block backdated creation/editing of past-day records by supervisors (same-day edits only, logged in `record_edits` inside a DB transaction).
   - Append new photos instead of deleting earlier same-day photos on `POST /records` updates.
-- [ ] **Persist Owner Acknowledgements:** Wire `POST /api/v1/records/:id/acknowledge` to `record_acknowledgements` so the "Reviewed" tick persists across devices.
+- [x] **Persist Owner Acknowledgements:** Wire `POST /api/v1/records/:id/acknowledge` to `record_acknowledgements` so the "Reviewed" tick persists across devices.
 
-### Subphase 2.4 — Unified Drizzle Schema Expansion
-- [ ] Extend `sites` table with SiteSaathi fields (`siteType`, `estimatedBudget`, `workStatus`, `paymentStatus`, `clientName`, `clientPhone`, `startDate`, `expectedEndDate`, `completedDate`).
-- [ ] Add synced financial & operations tables with `clientId` idempotency keys and `updatedAt` sync cursors: `workers`, `labour_records`, `labour_entries`, `vendors`, `materials`, `machinery`, `tools`, `expense_dues`, `client_payments`, `material_requests`, `site_tasks`.
-- [ ] Generate and apply Drizzle migrations (`drizzle-kit generate` / `migrate`).
+### Subphase 2.4 — Unified Drizzle Schema Expansion [COMPLETED]
+- [x] Extend `sites` table with SiteSaathi fields (`siteType`, `estimatedBudget`, `workStatus`, `paymentStatus`, `clientName`, `clientPhone`, `startDate`, `expectedEndDate`, `completedDate`).
+- [x] Add synced financial & operations tables with `clientId` idempotency keys and `updatedAt` sync cursors: `workers`, `labour_records`, `labour_entries`, `vendors`, `materials`, `machinery`, `tools`, `expense_dues`, `client_payments`, `material_requests`, `site_tasks`.
+- [x] Generate and apply Drizzle migrations (`drizzle-kit generate` / `migrate`).
 
 ---
 

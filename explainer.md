@@ -23,6 +23,11 @@ This document tracks all technologies, libraries, and architectural modules used
 | **Bilingual i18n Engine** | Localization | Instant reactive switching between Hindi and English |
 | **JSON Database Backup Engine**| Storage & Migration | Full offline database export & restore for switching phones |
 | **App Lock & Anti-Delete System** | Security & Protection | Device PIN, Biometric Fingerprint & Accidental Wipe Shield |
+| **Fastify v5** | Backend Web Framework | High-performance, low-overhead Node.js REST API server |
+| **Drizzle ORM & libSQL** | Backend Database ORM | Type-safe schema definitions and zero-codegen database queries |
+| **Turso (Distributed libSQL)** | Cloud Database | Edge-hosted, serverless SQLite database with global replication |
+| **Cloudflare R2 Storage Provider** | Cloud Object Storage | Zero-egress S3-compatible presigned media storage (photos/voice) |
+| **Server-Side Anti-Fake Engine** | Security & Verification | Haversine GPS geo-fencing, capture time-skew & anti-backdating |
 
 ---
 
@@ -1291,4 +1296,88 @@ This document tracks all technologies, libraries, and architectural modules used
   - Defined in `src/utils/reportExporter.ts`. Detects Unicode range `\u0900-\u097F`.
   - Mappable trade terms (e.g. *राजमिस्त्री* → *Mason*, *हेल्पर* → *Helper*, *सीमेंट बैग* → *Cement Bags*, *सरिया* → *Steel/TMT*, *उधारी* → *Due*, *चुकता* → *Paid*) are replaced before rendering tables in jsPDF.
 - **A short, simple summary:** Eliminates corrupt characters in generated PDF reports by cleanly translating Hindi trade terms.
+
+---
+
+## 🏗️ Phase 2: Unified Backend & Cloud Storage Architecture
+
+---
+
+### 7. Technology: Fastify v5 Backend Web Framework
+- **Name of the Technology:** Fastify v5 Web Framework
+- **What it does (Role & Purpose):**
+  - Serves the multi-tenant REST API for FieldLog operations, supervisor management, authentication, site assignment RBAC, and daily progress reporting.
+  - Replaces traditional Express with up to 4x higher throughput and lower memory footprint on cloud containers (Render).
+- **How it works (Under the Hood):**
+  - Implemented in `backend/src/server.ts`. Uses radix-tree routing (`find-my-way`) and JSON schema compilation via `fast-json-stringify` for rapid request serialization.
+  - Integrates `@fastify/rate-limit` to throttle login attempts and brute-force attacks against 4-digit supervisor PINs.
+  - Enforces route-level preHandler hooks for JWT authentication (`authenticate`), Owner authorization (`requireOwner`), and Supervisor authorization (`requireSupervisor`).
+- **A short, simple summary:** High-speed, lightweight Node.js API engine powering cloud sync, security, and multi-tenant business operations.
+
+---
+
+### 8. Technology: Drizzle ORM & libSQL Client
+- **Name of the Technology:** Drizzle ORM (`drizzle-orm/sqlite-core`, `drizzle-kit`)
+- **What it does (Role & Purpose):**
+  - Manages database schemas, relations, migrations, and type-safe queries between Fastify and Turso (libSQL).
+  - Unifies SiteSaathi's 11 operational tables (`workers`, `labourRecords`, `labourEntries`, `vendors`, `materials`, `machinery`, `tools`, `expenseDues`, `clientPayments`, `materialRequests`, `siteTasks`) with FieldLog's core multi-tenant tables.
+- **How it works (Under the Hood):**
+  - Configured in `backend/src/db/schema.ts` and `backend/drizzle.config.ts`.
+  - Maps TypeScript table definitions directly to SQLite DDL without runtime overhead or hidden query generation.
+  - Supports SQL migrations (`drizzle-kit generate` and `drizzle-kit migrate`) and foreign key cascade deletion for multi-tenant isolation.
+- **A short, simple summary:** Type-safe, zero-overhead database toolkit linking backend endpoints directly to cloud SQL tables.
+
+---
+
+### 9. Technology: Turso (Serverless Distributed libSQL Database)
+- **Name of the Technology:** Turso Cloud Database (`@libsql/client`)
+- **What it does (Role & Purpose):**
+  - Provides a managed, edge-hosted serverless cloud SQLite database with zero cold starts, hosted in the Indian AWS region (`aws-ap-south-1`).
+  - Acts as the single source of truth for cloud-synced contractor organizations, work sites, and daily records.
+- **How it works (Under the Hood):**
+  - Connects using `@libsql/client` over WebSocket / HTTP Hrana protocol (`libsql://...`), supporting local fallback SQLite files (`file:local.db`) for offline development.
+  - Enforces WAL (Write-Ahead Logging) mode and busy timeout protections (`PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;`).
+- **A short, simple summary:** Serverless, ultra-fast cloud SQLite database tailored for reliable data storage in India.
+
+---
+
+### 10. Technology: Cloudflare R2 Cloud Object Storage Provider (`R2StorageProvider`)
+- **Name of the Technology:** Cloudflare R2 Presigned S3 Storage Provider
+- **What it does (Role & Purpose):**
+  - Replaces fragile, ephemeral local server disk uploads with durable, scalable cloud object storage with **zero egress fees**.
+  - Stores high-resolution site progress photos and audio recordings without passing multi-megabyte binary payloads through the API server.
+- **How it works (Under the Hood):**
+  - Implemented in `backend/src/storage/r2.ts` using `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
+  - When a supervisor prepares to upload media, the app requests a presigned upload URL (`POST /api/v1/uploads/presign`).
+  - The backend validates MIME type, verifies site assignment, formats an organized S3 key (`orgs/{orgId}/sites/{siteId}/{date}/{uuid}.{ext}` using IST date), and generates a 5-minute pre-authenticated `PUT` URL. The mobile device uploads directly to Cloudflare R2.
+- **A short, simple summary:** Scalable zero-egress cloud storage allowing direct client uploads of site photos and audio notes.
+
+---
+
+### 11. Technology: Server-Side Anti-Fake Geolocation & Timestamp Engine
+- **Name of the Technology:** Anti-Fake Geolocation & Timestamp Verification Engine
+- **What it does (Role & Purpose):**
+  - Protects construction owners and contractors against fabricated progress reports, out-of-site photo submissions, and backdated attendance logs.
+- **How it works (Under the Hood):**
+  - Implemented in `backend/src/routes/records.ts` and `backend/src/utils/geo.ts`.
+  - **Haversine Distance Check:** Calculates spherical surface distance between photo GPS coordinates and site coordinates:
+    $$d = 2R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right)}\right)$$
+    If distance exceeds 500 meters, flags `distance_warning: true` with calculated distance in meters.
+  - **Time Skew Check:** Compares photo `capturedAt` with server `receivedAt`. If difference exceeds 15 minutes, flags `time_skew: true`.
+  - **Anti-Backdating Protection:** Restricts supervisor submissions strictly to today's date in Indian Standard Time (`getTodayIst()`), rejecting past-date creation with HTTP 400.
+  - **Audit Trail & Evidence Preservation:** Same-day updates record diffs in `record_edits` and append newly submitted photos rather than deleting earlier submissions.
+- **A short, simple summary:** Server-side anti-fraud verification ensuring site photos and reports are genuine, recent, and taken on-site.
+
+---
+
+### 12. Technology: Indian Phone Normalization & Rate-Limiting Protection
+- **Name of the Technology:** E.164 Phone Normalization & Brute-Force Rate Limiting
+- **What it does (Role & Purpose):**
+  - Ensures seamless login across Indian mobile networks regardless of whether users prefix their number with `+91`, `91`, `0`, or nothing.
+  - Defends 4-digit supervisor PINs against brute-force guessing attacks.
+- **How it works (Under the Hood):**
+  - Defined in `backend/src/utils/phone.ts`. Strips whitespace, dashes, and leading international codes, verifying exactly 10 digits starting with `6-9` and formatting as `+91XXXXXXXXXX`.
+  - Registered in `backend/src/server.ts` and `backend/src/routes/auth.ts` with `@fastify/rate-limit`, capping login attempts to 5 per minute per IP.
+- **A short, simple summary:** Robust Indian mobile phone sanitization and brute-force protection for supervisor PIN authentication.
+
 
