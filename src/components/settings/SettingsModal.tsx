@@ -39,6 +39,9 @@ import {
   Grid,
   Wind,
   Truck,
+  Users,
+  ClipboardCheck,
+  Tag,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -49,6 +52,9 @@ interface SettingsModalProps {
   onLoadSampleData: () => void;
   onClearAllData: () => void;
   onLogOut: () => void;
+  onOpenTeamModal?: () => void;
+  onOpenIssueChipsModal?: () => void;
+  onOpenDprFeed?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -59,6 +65,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLoadSampleData,
   onClearAllData,
   onLogOut,
+  onOpenTeamModal,
+  onOpenIssueChipsModal,
+  onOpenDprFeed,
 }) => {
   const { trade, setTrade, themeMode, setThemeMode, language, setLanguage, t, tradeConfig } = useTheme();
 
@@ -1049,6 +1058,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span className="text-[11px] font-extrabold text-blue-600">Replay →</span>
               </button>
             </div>
+
+            {/* FieldLog Operations & Supervisors (Owner Only) */}
+            {account?.role !== 'supervisor' && (onOpenTeamModal || onOpenIssueChipsModal || onOpenDprFeed) && (
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="font-extrabold text-slate-500 uppercase tracking-wider block text-[11px]">
+                  {language === 'hi' ? 'फील्ड ऑपरेशन्स और सुपरवाइज़र' : 'Field Operations & Team'}
+                </span>
+
+                {onOpenTeamModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenTeamModal();
+                    }}
+                    className="w-full p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-indigo-900 dark:text-indigo-300 font-bold flex items-center justify-between transition-all hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      <span>{language === 'hi' ? 'सुपरवाइज़र टीम और पिन प्रबंधन' : 'Supervisors & PIN Management'}</span>
+                    </div>
+                    <span className="text-[11px] font-extrabold text-indigo-600">Manage →</span>
+                  </button>
+                )}
+
+                {onOpenDprFeed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenDprFeed();
+                    }}
+                    className="w-full p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-300 font-bold flex items-center justify-between transition-all hover:bg-blue-100 dark:hover:bg-blue-950/50 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ClipboardCheck className="w-4 h-4 text-blue-600" />
+                      <span>{language === 'hi' ? 'दैनिक रिपोर्ट फ़ीड (DPR Feed)' : 'Daily Progress Reports (DPR)'}</span>
+                    </div>
+                    <span className="text-[11px] font-extrabold text-blue-600">Review →</span>
+                  </button>
+                )}
+
+                {onOpenIssueChipsModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenIssueChipsModal();
+                    }}
+                    className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 font-bold flex items-center justify-between transition-all hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-slate-600" />
+                      <span>{language === 'hi' ? 'समस्या चिप्स कॉन्फ़िगर करें' : 'Configure Issue Chips'}</span>
+                    </div>
+                    <span className="text-[11px] font-extrabold text-slate-600">Customize →</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* 7. Data Tools (No '&' or '/') */}
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">

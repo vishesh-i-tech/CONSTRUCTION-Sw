@@ -48,6 +48,11 @@ import { ToastNotification, ToastMessage } from './components/common/ToastNotifi
 import { MobileDeviceShell } from './components/common/MobileDeviceShell';
 import { SplashScreen } from './components/common/SplashScreen';
 import { exportSiteReportPdf } from './utils/reportExporter';
+import { SupervisorDprModal } from './components/dpr/SupervisorDprModal';
+import { SupervisorTodayDashboard } from './components/dpr/SupervisorTodayDashboard';
+import { OwnerDprFeedModal } from './components/dpr/OwnerDprFeedModal';
+import { OwnerIssueChipsModal } from './components/dpr/OwnerIssueChipsModal';
+import { TeamManagementModal } from './components/team/TeamManagementModal';
 
 export const App: React.FC = () => {
   const { trade, setTrade, language, setLanguage, t, tradeConfig } = useTheme();
@@ -81,6 +86,13 @@ export const App: React.FC = () => {
   const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
   const [isRemindersModalOpen, setIsRemindersModalOpen] = useState(false);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+
+  // FieldLog Phase 3 Operations & DPR State
+  const [isSupervisorDprOpen, setIsSupervisorDprOpen] = useState(false);
+  const [selectedSiteForDpr, setSelectedSiteForDpr] = useState<Site | null>(null);
+  const [isOwnerDprFeedOpen, setIsOwnerDprFeedOpen] = useState(false);
+  const [isTeamManagementOpen, setIsTeamManagementOpen] = useState(false);
+  const [isOwnerIssueChipsOpen, setIsOwnerIssueChipsOpen] = useState(false);
 
   // Selected site for drilldown modal
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
@@ -520,6 +532,14 @@ export const App: React.FC = () => {
             searchQuery={globalSearchQuery}
             onSearchChange={(q) => setGlobalSearchQuery(q)}
             showSearchBar={activeTab === 'dashboard'}
+            userRole={currentAccount?.role || 'owner'}
+            onOpenDprFeed={() => setIsOwnerDprFeedOpen(true)}
+            onOpenTeamModal={() => setIsTeamManagementOpen(true)}
+            onOpenIssueChipsModal={() => setIsOwnerIssueChipsOpen(true)}
+            onOpenSupervisorDpr={() => {
+              setSelectedSiteForDpr(null);
+              setIsSupervisorDprOpen(true);
+            }}
           />
 
           {/* Main Container */}
@@ -527,24 +547,34 @@ export const App: React.FC = () => {
 
         {/* Tab Views */}
         {activeTab === 'dashboard' && (
-          <DashboardOverview
-            sites={sites}
-            tools={tools}
-            labourRecords={labourRecords}
-            materials={materials}
-            machinery={machinery}
-            dues={dues}
-            insights={insights}
-            onSelectSite={(site) => setSelectedSite(site)}
-            onOpenAddSite={() => setIsAddSiteModalOpen(true)}
-            onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
-            onOpenOcrModal={() => setIsOcrModalOpen(true)}
-            onNavigateTab={handleNavigateTab}
-            onOpenReport={handleOpenReportFromSite}
-            contractorName={currentAccount?.name}
-            companyName={currentAccount?.companyName}
-            searchQuery={globalSearchQuery}
-          />
+          currentAccount?.role === 'supervisor' ? (
+            <SupervisorTodayDashboard
+              assignedSites={sites}
+              onOpenDprModal={(siteId?: string) => {
+                setSelectedSiteForDpr(siteId ? sites.find((s) => s.id === siteId) || null : null);
+                setIsSupervisorDprOpen(true);
+              }}
+            />
+          ) : (
+            <DashboardOverview
+              sites={sites}
+              tools={tools}
+              labourRecords={labourRecords}
+              materials={materials}
+              machinery={machinery}
+              dues={dues}
+              insights={insights}
+              onSelectSite={(site) => setSelectedSite(site)}
+              onOpenAddSite={() => setIsAddSiteModalOpen(true)}
+              onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+              onOpenOcrModal={() => setIsOcrModalOpen(true)}
+              onNavigateTab={handleNavigateTab}
+              onOpenReport={handleOpenReportFromSite}
+              contractorName={currentAccount?.name}
+              companyName={currentAccount?.companyName}
+              searchQuery={globalSearchQuery}
+            />
+          )
         )}
 
         {activeTab === 'sites' && (
@@ -667,6 +697,9 @@ export const App: React.FC = () => {
         onLoadSampleData={handleLoadSampleData}
         onClearAllData={handleClearAllData}
         onLogOut={handleLogOut}
+        onOpenTeamModal={() => setIsTeamManagementOpen(true)}
+        onOpenIssueChipsModal={() => setIsOwnerIssueChipsOpen(true)}
+        onOpenDprFeed={() => setIsOwnerDprFeedOpen(true)}
       />
 
       {/* Voice Assistant AI Modal */}
@@ -928,6 +961,45 @@ export const App: React.FC = () => {
             name: `${labour.date} (${labour.totalWorkers || (labour.entries?.length || 0)} workers)`,
           })
         }
+      />
+
+      {/* Supervisor Geotagged Daily Progress Report Modal */}
+      <SupervisorDprModal
+        isOpen={isSupervisorDprOpen}
+        onClose={() => {
+          setIsSupervisorDprOpen(false);
+          setSelectedSiteForDpr(null);
+        }}
+        assignedSites={sites}
+        initialSiteId={selectedSiteForDpr?.id}
+        onSubmitted={() => {
+          refreshInsights();
+          showToast(
+            language === 'hi'
+              ? 'दैनिक रिपोर्ट सफलतापूर्वक दर्ज की गई!'
+              : 'Daily progress report recorded!'
+          );
+        }}
+      />
+
+      {/* Owner Daily Reports Feed with Audio & Seen Acknowledgment */}
+      <OwnerDprFeedModal
+        isOpen={isOwnerDprFeedOpen}
+        onClose={() => setIsOwnerDprFeedOpen(false)}
+        sites={sites}
+      />
+
+      {/* Owner Custom Issue Chips */}
+      <OwnerIssueChipsModal
+        isOpen={isOwnerIssueChipsOpen}
+        onClose={() => setIsOwnerIssueChipsOpen(false)}
+      />
+
+      {/* Team & Supervisor PIN Management */}
+      <TeamManagementModal
+        isOpen={isTeamManagementOpen}
+        onClose={() => setIsTeamManagementOpen(false)}
+        sites={sites}
       />
 
       {/* Safety Confirmation Modal for Deletions */}

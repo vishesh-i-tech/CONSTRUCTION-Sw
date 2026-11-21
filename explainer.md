@@ -28,6 +28,12 @@ This document tracks all technologies, libraries, and architectural modules used
 | **Turso (Distributed libSQL)** | Cloud Database | Edge-hosted, serverless SQLite database with global replication |
 | **Cloudflare R2 Storage Provider** | Cloud Object Storage | Zero-egress S3-compatible presigned media storage (photos/voice) |
 | **Server-Side Anti-Fake Engine** | Security & Verification | Haversine GPS geo-fencing, capture time-skew & anti-backdating |
+| **Dexie Sync Outbox Engine** | Offline-First Engine | Guarantees zero data loss with offline mutation queue & retry |
+| **Direct R2 Media Pipeline** | Storage & Upload | Presigned binary direct uploads for site photos and audio notes |
+| **3-Tap Geotagged DPR Modal** | Field Operations | Fast on-site daily progress reporting with photo GPS & voice |
+| **Owner DPR Review Feed** | Monitoring & Audit | Chronological report audit with voice playback & double-blue ticks |
+| **Owner Issue Chips Customizer** | Configuration | Dynamic on-site issue classification with 8-chip cognitive guard |
+| **Supervisor PIN Auth System** | Identity & Access | Zero-email phone + 4-digit PIN authentication with offline caching |
 
 ---
 
@@ -1379,5 +1385,85 @@ This document tracks all technologies, libraries, and architectural modules used
   - Defined in `backend/src/utils/phone.ts`. Strips whitespace, dashes, and leading international codes, verifying exactly 10 digits starting with `6-9` and formatting as `+91XXXXXXXXXX`.
   - Registered in `backend/src/server.ts` and `backend/src/routes/auth.ts` with `@fastify/rate-limit`, capping login attempts to 5 per minute per IP.
 - **A short, simple summary:** Robust Indian mobile phone sanitization and brute-force protection for supervisor PIN authentication.
+
+---
+
+### 13. Technology: Persistent Dexie Sync Outbox Engine (`syncEngine.ts`, Dexie Schema v5)
+- **Name of the Technology:** Persistent Dexie Sync Outbox Engine
+- **What it does (Role & Purpose):**
+  - Guarantees zero data loss for on-site operations when working with unstable or zero cellular connectivity.
+  - Queues all mutations (daily progress records, labour muster, material purchases, voice notes, photos) locally and transparently drains the queue as soon as internet connectivity is restored.
+- **How it works (Under the Hood):**
+  - Schema version 5 adds `syncOutbox` and `syncMeta` stores to `database.ts`.
+  - When actions occur offline, `enqueueSyncMutation()` generates an atomic UUID, stores binary media blobs (as base64 or Data URLs) and mutation payloads in IndexedDB, and sets `status = 'pending'`.
+  - An event listener on `window.addEventListener('online', ...)` triggers `processSyncOutbox()`.
+  - Each item is processed in sequence: photos and audio notes are converted to binary Blobs via `dataUrlToBlob()`, uploaded to Cloudflare R2 via presigned URLs, and the final payload is posted to the Fastify API. On 2xx response, the outbox record is purged and local Dexie entities are marked `synced: true`.
+- **A short, simple summary:** Bulletproof offline mutation queue that stores operational logs and uploads media automatically upon internet reconnection.
+
+---
+
+### 14. Technology: Direct-to-R2 Presigned Media Pipeline (`apiClient.ts`, `syncEngine.ts`)
+- **Name of the Technology:** Presigned Cloudflare R2 Upload Pipeline
+- **What it does (Role & Purpose):**
+  - Allows mobile clients to transfer high-resolution photos and voice recordings directly to cloud object storage without passing large binary streams through the API application server.
+- **How it works (Under the Hood):**
+  - Before uploading, the client requests a short-lived signed URL via `apiPresignUpload(siteId, kind, mimeType)`.
+  - The Fastify backend validates permissions and returns a pre-signed `PUT` URL pointing directly to Cloudflare R2.
+  - The client executes a raw binary `fetch(uploadUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mimeType } })`, bypassing server CPU and RAM.
+  - The resulting immutable storage key (`orgs/{orgId}/sites/{siteId}/{date}/{uuid}.{ext}`) is saved in the record metadata.
+- **A short, simple summary:** Ultra-fast direct client-to-cloud media upload pipeline with zero server bandwidth overhead.
+
+---
+
+### 15. Technology: Supervisor 3-Tap Geotagged DPR Modal (`SupervisorDprModal.tsx`, `SupervisorTodayDashboard.tsx`)
+- **Name of the Technology:** 3-Tap Geotagged Daily Progress Reporting (DPR) Engine
+- **What it does (Role & Purpose):**
+  - Empowers site supervisors to log comprehensive daily site progress in under 30 seconds using just three taps.
+  - Captures on-site work status, bilingual issue chips, camera photos with geolocation metadata, and audio notes.
+- **How it works (Under the Hood):**
+  - **Tap 1 (Status):** 🟢 Full Day Work / 🟡 Half Day / 🔴 Work Stopped.
+  - **Tap 2 (Issue Chips):** Bilingual toggleable chips (e.g., Cement Shortage / सीमेंट की कमी, Rain / बारिश, Power Cut / बिजली बंद).
+  - **Tap 3 (Submit):** Automatically queries `navigator.geolocation.getCurrentPosition()` for high-accuracy GPS coordinates, compresses photos to ≤200KB via HTML5 canvas downsampling (`imageCompressor.ts`), records audio memos with live animated waveform (`audioRecorder.ts`), and queues directly into the persistent sync outbox.
+- **A short, simple summary:** Rapid 30-second mobile progress reporting for supervisors with anti-fake photo geotagging and audio notes.
+
+---
+
+### 16. Technology: Owner DPR Review Feed & Double-Blue-Tick Acknowledgement (`OwnerDprFeedModal.tsx`)
+- **Name of the Technology:** Owner Chronological Audit Feed & Double-Blue-Tick Acknowledgement
+- **What it does (Role & Purpose):**
+  - Gives contractors and owners a centralized, chronological Instagram-style audit feed of all daily progress reports submitted across all their project sites.
+  - Provides instant voice note playback, photo zooming, anti-fake compliance badges, and WhatsApp-style double-blue-tick acknowledgements.
+- **How it works (Under the Hood):**
+  - Displays reports with site filter, date selector, and Anti-Fake verification badges (🟢 On-Site GPS Match, 🟡 GPS Warning >500m, ⏱️ Capture Skew).
+  - Voice notes include interactive playback with variable speed toggle (`1.0x`, `1.5x`, `2.0x`).
+  - Tapping `✓✓ Seen` calls `apiAcknowledgeRecord(recordId)` and records the owner's acknowledgment timestamp in `record_acknowledgements`, confirming to supervisors that the report was reviewed.
+- **A short, simple summary:** Centralized daily progress review feed for owners featuring voice playback and double-blue-tick receipt confirmation.
+
+---
+
+### 17. Technology: Owner Dynamic Issue Chips Customizer (`OwnerIssueChipsModal.tsx`)
+- **Name of the Technology:** Owner Dynamic Issue Chips Customizer
+- **What it does (Role & Purpose):**
+  - Allows project owners to define, rename, and activate custom site bottleneck chips tailored to their specific construction challenges while strictly enforcing a maximum of 8 active chips on supervisors' mobile screens.
+- **How it works (Under the Hood):**
+  - Queries local Dexie store and synchronizes with backend `/api/v1/issue-types`.
+  - Contractors can add custom bilingual chips (Hindi + English) with emoji icons.
+  - Enforces a cognitive guardrail: if 8 chips are already active, attempting to enable a 9th chip displays an advisory prompt asking the owner to deactivate an existing chip first.
+- **A short, simple summary:** Customizable site issue tags designed with an 8-chip guardrail to prevent mobile cognitive overload.
+
+---
+
+### 18. Technology: Supervisor PIN & Team Management Architecture (`TeamManagementModal.tsx`, `AuthScreen.tsx`)
+- **Name of the Technology:** Zero-Email Supervisor PIN & Team Management System
+- **What it does (Role & Purpose):**
+  - Replaces complex enterprise email/password registration with a phone + 4-digit PIN authentication model built specifically for Indian construction supervisors.
+  - Allows owners to assign supervisors to specific sites, reset PINs with 1 tap, and toggle active status.
+- **How it works (Under the Hood):**
+  - Owners create supervisors directly inside `TeamManagementModal` (`POST /api/v1/supervisors`).
+  - Supervisors log in by entering their 10-digit phone number and 4-digit PIN on `AuthScreen.tsx`.
+  - Upon first login, credentials are verified via API and cached locally with PBKDF2 salt hashing, allowing subsequent logins to work 100% offline.
+  - Supervisors receive scoped permissions, seeing only their assigned job sites and today's status dashboard.
+- **A short, simple summary:** Phone + 4-digit PIN authentication designed for site supervisors with offline login support and owner site controls.
+
 
 

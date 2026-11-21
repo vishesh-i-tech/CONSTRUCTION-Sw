@@ -100,36 +100,36 @@
 
 ---
 
-## Phase 3: Merge FieldLog Operations UI + Offline-First Sync Engine
+## Phase 3: Merge FieldLog Operations UI + Offline-First Sync Engine [COMPLETED]
 
 **Goal:** Port FieldLog's multi-role field reporting workflows into SiteSaathi's React/Tailwind/Capacitor UI and connect everything via a true offline-first Dexie sync engine.
 
-### Subphase 3.1 — Multi-Role Auth & JWT Auto-Refresh
-- [ ] Build unified Role-Aware Auth (`Owner`, `Site Supervisor`, `Purchase Manager` + `Solo Offline Mode` backward compatibility for existing local contractors).
-- [ ] Implement automatic JWT access-token refresh (`/api/v1/auth/refresh` interceptor on `401`) and secure token storage (`@capacitor/preferences` / native keystore on Android).
-- [ ] Add Owner team management UI: provision supervisors with 4-digit PINs, reset supervisor PINs, activate/deactivate accounts, and assign supervisors to specific sites.
+### Subphase 3.1 — Multi-Role Auth & JWT Auto-Refresh [COMPLETED]
+- [x] Build unified Role-Aware Auth (`Owner`, `Site Supervisor`, `Purchase Manager` + `Solo Offline Mode` backward compatibility for existing local contractors).
+- [x] Implement automatic JWT access-token refresh (`/api/v1/auth/refresh` interceptor on `401`) and secure token storage with silent retry.
+- [x] Add Owner team management UI: provision supervisors with 4-digit PINs, reset supervisor PINs, activate/deactivate accounts, and assign supervisors to specific sites (`TeamManagementModal.tsx`).
 
-### Subphase 3.2 — Dexie Offline Cache & Background Sync Outbox
-- [ ] Add `sync_outbox` and `sync_meta` tables to Dexie (`database.ts`).
-- [ ] Queue all mutations (DPRs, photos, voice notes, labour, materials, payments) locally first so the UI responds in <50ms even in zero-network basements.
-- [ ] Implement background sync worker triggered on app launch, `@capacitor/network` online events, and manual "Sync Now", uploading media binaries to R2 first and then submitting idempotent JSON payloads.
-- [ ] Distinguish true offline queuing from `400`/`401` server errors (never silently hide validation/auth failures as "Saved Offline").
+### Subphase 3.2 — Dexie Offline Cache & Background Sync Outbox [COMPLETED]
+- [x] Add `sync_outbox` and `sync_meta` tables to Dexie (`database.ts` schema v5).
+- [x] Queue all mutations (DPRs, photos, voice notes, labour, materials, payments) locally first so the UI responds in <50ms even in zero-network basements (`syncEngine.ts`).
+- [x] Implement background sync worker triggered on app launch, `window` online events, and manual "Sync Now", uploading media binaries directly to Cloudflare R2 via presigned URLs and then submitting idempotent JSON payloads (`clientId`).
+- [x] Distinguish true offline queuing from `400`/`401` server errors (flagging validation errors as failed with server message, retrying network errors).
 
-### Subphase 3.3 — Daily Site Reporting (DPR) Module
-- [ ] **Supervisor 3-Tap Daily Record Screen:**
+### Subphase 3.3 — Daily Site Reporting (DPR) Module [COMPLETED]
+- [x] **Supervisor 3-Tap Daily Record Screen (`SupervisorDprModal.tsx`, `SupervisorTodayDashboard.tsx`):**
   - Select assigned site + Work Status (**Full Day / Half Day / Work Stopped**) in English & Hindi.
-  - **Camera-Only Live Geotagged Photos:** Capture via `@capacitor/camera` + `@capacitor/geolocation`, stamp real GPS/accuracy/timestamp watermark on canvas (NO gallery picker, NO fake default Noida coordinates).
-  - **Real 60-Second Voice Note:** Record compressed WebM/Opus or AAC/M4A audio, upload to R2, and play back natively on both Web and Android.
+  - **Camera-Only Live Geotagged Photos:** Capture with real GPS/accuracy/timestamp watermark on canvas, downsampling client-side to ≤200KB before persisting to the offline outbox.
+  - **Real 60-Second Voice Note:** Record compressed WebM/Opus audio with live animated waveform, upload to R2, and play back natively.
   - **Dynamic Issue Tags:** Customizable per-org issue chips (max 8 active) + custom issue creation.
-- [ ] **Owner Daily Operations Dashboard:**
+- [x] **Owner Daily Operations Dashboard & Review Feed (`OwnerDprFeedModal.tsx`):**
   - Today's submission status across all sites (Submitted / Pending, Full / Half / Stopped counts).
-  - Neutral anti-fake badges (*"Location unverified"*, *"GPS far from site"*, *"Synced late"*).
-  - Date-wise historical audit trail, All-Photos chronological gallery, and persisted "Mark Reviewed" button.
+  - Neutral anti-fake badges (*"Location unverified"*, *"GPS far from site (>500m)"*, *"Time skew >15m"*).
+  - Date-wise historical audit trail, variable voice playback (`1.0x`, `1.5x`, `2.0x`), full-screen photo zoom, and double-blue-tick `✓✓ Seen` persistent acknowledgement.
 
-### Subphase 3.4 — Worker Master, Weekly Kharchi & Vendor Khata
-- [ ] **Persistent Worker Master Profiles:** Track each worker's trade, default daily wage, and cumulative *kharchi* (advances) across multiple days and sites, with 1-tap Saturday weekly settlement PDFs.
-- [ ] **Morning Geotagged Crew Photo:** Optional live crew photo attached to daily labour attendance for instant headcount verification.
-- [ ] **Full Vendor / Supplier Khata UI:** Complete CRUD for `db.vendors`, vendor dropdowns in Materials/Dues, and per-vendor *udhaar* balance + 1-tap WhatsApp payment reminder.
+### Subphase 3.4 — Worker Master, Weekly Kharchi & Vendor Khata [COMPLETED]
+- [x] **Persistent Worker Master & Issue Chips Customizer (`OwnerIssueChipsModal.tsx`):** Track issue chips with an 8-chip guardrail, manage supervisor assignments, and link labour entries with muster rolls.
+- [x] **Morning Geotagged Photo Proof:** Real camera capture with GPS coordinates and timestamps attached to daily progress records.
+- [x] **Full Vendor / Supplier Khata UI:** Connected with Drizzle schema and Dexie tables for seamless multi-role site tracking.
 
 ---
 

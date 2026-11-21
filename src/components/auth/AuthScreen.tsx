@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
-import { TradeCategory, ContractorAccount } from '../../types';
+import { TradeCategory, ContractorAccount, UserRole } from '../../types';
 import { TRADE_CONFIGS, ALL_TRADE_KEYS } from '../../core/theme/tradeConfigs';
 import { db } from '../../core/db/database';
 import { hashCredential, verifyCredential } from '../../utils/cryptoUtils';
+import { apiOwnerLogin, apiOwnerSignup, apiSupervisorLogin } from '../../services/apiClient';
 import {
   HardHat,
   Wrench,
@@ -67,6 +68,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
 
   // Login form state
+  const [authRole, setAuthRole] = useState<'owner' | 'supervisor'>('owner');
   const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -177,6 +179,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       // SEC-DEF-001: Hash credentials using PBKDF2 with unique salt
       const hashedPin = await hashCredential(password.trim());
 
+      let orgId: string | undefined = undefined;
+      try {
+        const signupRes = await apiOwnerSignup({
+          companyName: companyName.trim() || `${name.trim()} Construction`,
+          name: name.trim(),
+          email: `${cleanPhone}@sitesaathi.local`,
+          phone: cleanPhone,
+          password: password.trim(),
+        });
+        if (signupRes.data?.organization?.id) {
+          orgId = signupRes.data.organization.id;
+        }
+      } catch {
+        // Offline registration fallback - works seamlessly offline
+      }
+
       const newAccount: ContractorAccount = {
         id: `contractor-${Date.now()}`,
         name: name.trim(),
@@ -186,6 +204,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         isPinLockEnabled: true,
         companyName: companyName.trim() || undefined,
         trade: selectedTrade,
+        role: 'owner',
+        organizationId: orgId,
         language,
         themeMode: 'light',
         tutorialCompleted: false,
@@ -221,74 +241,220 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     setErrorMsg('');
     const cleanPhone = loginPhone.trim().replace(/\D/g, '');
-    const allAccounts = await db.account.toArray();
-    const matched = allAccounts.find((a) => a.phone.replace(/\D/g, '') === cleanPhone);
 
-    if (matched) {
-      if (matched.password || matched.pinLock) {
-        const targetCred = matched.password || matched.pinLock || '';
-        const verifyRes = await verifyCredential(loginPassword.trim(), targetCred);
-
-        if (!verifyRes.isValid) {
-          const nextFailed = failedAttempts + 1;
-          setFailedAttempts(nextFailed);
-          if (nextFailed >= 5) {
-            setLockoutTimer(30);
-            setErrorMsg(
-              language === 'hi'
-                ? '5 बार गलत पिन! सुरक्षा कारणों से 30 सेकंड के लिए प्रतीक्षा करें।'
-                : '5 incorrect attempts! Please wait 30 seconds before retrying.'
-            );
-          } else {
-            setErrorMsg(
-              language === 'hi'
-                ? `गलत पिन / पासवर्ड दर्ज किया गया। (${5 - nextFailed} प्रयास शेष)`
-                : `Incorrect PIN / password. (${5 - nextFailed} attempts remaining)`
-            );
-          }
-          return;
-        }
-
-        // Successful verification! Reset failed counter
-        setFailedAttempts(0);
-
-        // SEC-DEF-001: Seamless backward-compatible migration for legacy plaintext accounts
-        if (verifyRes.isLegacy) {
-          const upgradedHash = await hashCredential(loginPassword.trim());
-          await db.account.update(matched.id, {
-            password: upgradedHash,
-            pinLock: matched.pinLock ? upgradedHash : upgradedHash,
-          });
-          matched.password = upgradedHash;
-          matched.pinLock = upgradedHash;
-        }
-      } else {
-        // Uncredentialed restored account: NEVER auto-authenticate and NEVER allow claiming with public metadata!
-        // Display security notice detailing the limitation and secure recovery options
-        setUncredentialedAccount(matched);
-        setIsUncredentialedModalOpen(true);
+    // ------------------------------------------------------------------
+    // Supervisor Authentication (Cloud with Offline PBKDF2 fallback)
+    // ------------------------------------------------------------------
+    if (authRole === 'supervisor') {
+      if (loginPassword.trim().length !== 4) {
+        setErrorMsg(
+          language === 'hi'
+            ? 'सुपरवाइज़र पिन ठीक 4 अंकों का होना चाहिए'
+            : 'Supervisor PIN must be exactly 4 digits'
+        );
         return;
       }
 
-      localStorage.setItem('sitesaathi_active_user_id', matched.id);
-      setTrade(matched.trade);
-      setLanguage(matched.language);
-      onAuthenticated(matched, false);
-    } else {
+      setIsSubmitting(true);
+      try {
+        // 1. Attempt online API login
+        const onlineRes = await apiSupervisorLogin(cleanPhone, loginPassword.trim());
+        if (onlineRes.data?.user) {
+          const user = onlineRes.data.user;
+          const hashedPin = await hashCredential(loginPassword.trim());
+
+          const supervisorAccount: ContractorAccount = {
+            id: user.id,
+            name: user.name,
+            phone: cleanPhone,
+            role: 'supervisor',
+            organizationId: user.organizationId,
+            assignedSiteIds: (user as any).assignedSiteIds || [],
+            password: hashedPin,
+            pinLock: hashedPin,
+            isPinLockEnabled: true,
+            trade: 'construction',
+            language,
+            themeMode: 'light',
+            tutorialCompleted: true,
+            createdAt: new Date().toISOString(),
+          };
+
+          await db.account.put(supervisorAccount);
+          localStorage.setItem('sitesaathi_active_user_id', supervisorAccount.id);
+          setTrade('construction');
+          setLanguage(language);
+          onAuthenticated(supervisorAccount, false);
+          return;
+        }
+
+        // 2. Offline fallback: Check local Dexie database for previously cached supervisor
+        const allAccounts = await db.account.toArray();
+        const matched = allAccounts.find(
+          (a) => a.phone.replace(/\D/g, '') === cleanPhone && a.role === 'supervisor'
+        );
+
+        if (matched && (matched.password || matched.pinLock)) {
+          const targetCred = matched.password || matched.pinLock || '';
+          const verifyRes = await verifyCredential(loginPassword.trim(), targetCred);
+          if (verifyRes.isValid) {
+            setFailedAttempts(0);
+            localStorage.setItem('sitesaathi_active_user_id', matched.id);
+            setTrade(matched.trade);
+            setLanguage(matched.language);
+            onAuthenticated(matched, false);
+            return;
+          }
+        }
+
+        setErrorMsg(
+          onlineRes.error ||
+            (language === 'hi'
+              ? 'सुपरवाइज़र पिन अमान्य है या पहली बार लॉगिन के लिए इंटरनेट आवश्यक है।'
+              : 'Invalid supervisor PIN or internet required for first-time login.')
+        );
+      } catch (err) {
+        console.error('Supervisor login error:', err);
+        setErrorMsg(
+          language === 'hi'
+            ? 'लॉगिन में त्रुटि हुई। कृपया जांचें कि इंटरनेट चालू है या पिन सही है।'
+            : 'Login error. Please ensure internet is active or PIN is correct.'
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // ------------------------------------------------------------------
+    // Owner Authentication (Online API attempt + Offline Dexie fallback)
+    // ------------------------------------------------------------------
+    setIsSubmitting(true);
+    try {
+      if (loginPassword.trim()) {
+        try {
+          const onlineRes = await apiOwnerLogin(cleanPhone, loginPassword.trim());
+          if (onlineRes.data?.user) {
+            const user = onlineRes.data.user;
+            const hashedPin = await hashCredential(loginPassword.trim());
+            const existing = await db.account.where('phone').equals(cleanPhone).first();
+
+            const ownerAccount: ContractorAccount = existing
+              ? {
+                  ...existing,
+                  role: 'owner',
+                  organizationId: user.organizationId,
+                  name: user.name || existing.name,
+                }
+              : {
+                  id: user.id,
+                  name: user.name,
+                  phone: cleanPhone,
+                  role: 'owner',
+                  organizationId: user.organizationId,
+                  password: hashedPin,
+                  pinLock: hashedPin,
+                  isPinLockEnabled: true,
+                  trade: 'construction',
+                  language,
+                  themeMode: 'light',
+                  tutorialCompleted: false,
+                  createdAt: new Date().toISOString(),
+                };
+
+            await db.account.put(ownerAccount);
+            localStorage.setItem('sitesaathi_active_user_id', ownerAccount.id);
+            setTrade(ownerAccount.trade);
+            setLanguage(ownerAccount.language);
+            onAuthenticated(ownerAccount, false);
+            return;
+          }
+        } catch {
+          // Fall through to offline Dexie authentication
+        }
+      }
+
+      // Offline Dexie Check
+      const allAccounts = await db.account.toArray();
+      const matched = allAccounts.find((a) => a.phone.replace(/\D/g, '') === cleanPhone);
+
+      if (matched) {
+        if (matched.password || matched.pinLock) {
+          const targetCred = matched.password || matched.pinLock || '';
+          const verifyRes = await verifyCredential(loginPassword.trim(), targetCred);
+
+          if (!verifyRes.isValid) {
+            const nextFailed = failedAttempts + 1;
+            setFailedAttempts(nextFailed);
+            if (nextFailed >= 5) {
+              setLockoutTimer(30);
+              setErrorMsg(
+                language === 'hi'
+                  ? '5 बार गलत पिन! सुरक्षा कारणों से 30 सेकंड के लिए प्रतीक्षा करें।'
+                  : '5 incorrect attempts! Please wait 30 seconds before retrying.'
+              );
+            } else {
+              setErrorMsg(
+                language === 'hi'
+                  ? `गलत पिन / पासवर्ड दर्ज किया गया। (${5 - nextFailed} प्रयास शेष)`
+                  : `Incorrect PIN / password. (${5 - nextFailed} attempts remaining)`
+              );
+            }
+            return;
+          }
+
+          // Successful verification! Reset failed counter
+          setFailedAttempts(0);
+
+          // SEC-DEF-001: Seamless backward-compatible migration for legacy plaintext accounts
+          if (verifyRes.isLegacy) {
+            const upgradedHash = await hashCredential(loginPassword.trim());
+            await db.account.update(matched.id, {
+              password: upgradedHash,
+              pinLock: matched.pinLock ? upgradedHash : upgradedHash,
+            });
+            matched.password = upgradedHash;
+            matched.pinLock = upgradedHash;
+          }
+        } else {
+          setUncredentialedAccount(matched);
+          setIsUncredentialedModalOpen(true);
+          return;
+        }
+
+        localStorage.setItem('sitesaathi_active_user_id', matched.id);
+        setTrade(matched.trade);
+        setLanguage(matched.language);
+        onAuthenticated(matched, false);
+      } else {
+        setErrorMsg(
+          language === 'hi'
+            ? 'यह नंबर नहीं मिला। कृपया साइन अप करें या नंबर जांचें।'
+            : 'No account found with this phone number. Please sign up.'
+        );
+      }
+    } catch (err) {
+      console.error('Owner login error:', err);
       setErrorMsg(
         language === 'hi'
-          ? 'यह नंबर नहीं मिला। कृपया साइन अप करें या नंबर जांचें।'
-          : 'No account found with this phone number. Please sign up.'
+          ? 'लॉगिन में समस्या आई। पुनः प्रयास करें।'
+          : 'Login encountered an issue. Please try again.'
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
 
   // SEC-DEF-002 FIX: Selecting account pre-fills phone and transitions to secure PIN challenge view
   const handleQuickAccountSelect = (acc: ContractorAccount) => {
     setLoginPhone(acc.phone.replace(/\D/g, ''));
     setLoginPassword('');
     setErrorMsg('');
+    if (acc.role === 'supervisor') {
+      setAuthRole('supervisor');
+    } else {
+      setAuthRole('owner');
+    }
     if (!acc.password && !acc.pinLock) {
       // Uncredentialed restored account: NEVER auto-authenticate and NEVER allow claiming with public metadata!
       setUncredentialedAccount(acc);
@@ -596,6 +762,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </p>
             </div>
 
+            {/* Segmented Role Selector: Owner vs Supervisor */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthRole('owner');
+                  setErrorMsg('');
+                }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  authRole === 'owner'
+                    ? 'bg-white text-blue-600 shadow-xs border border-slate-200/60'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <HardHat className="w-3.5 h-3.5" />
+                <span>{language === 'hi' ? 'ठेकेदार / मालिक' : 'Owner'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthRole('supervisor');
+                  setErrorMsg('');
+                }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  authRole === 'supervisor'
+                    ? 'bg-white text-emerald-600 shadow-xs border border-slate-200/60'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>{language === 'hi' ? 'सुपरवाइज़र (PIN)' : 'Supervisor (PIN)'}</span>
+              </button>
+            </div>
+
             {/* Error Message */}
             {errorMsg && (
               <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700 flex items-center gap-2">
@@ -625,14 +825,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               {/* Password / PIN Field */}
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {language === 'hi' ? 'सुरक्षा पिन / पासवर्ड' : 'Enter Password'}
+                  {authRole === 'supervisor'
+                    ? (language === 'hi' ? '4-अंकों का सुपरवाइज़र पिन' : '4-Digit Supervisor PIN')
+                    : (language === 'hi' ? 'सुरक्षा पिन / पासवर्ड' : 'Enter Password')}
                 </span>
                 <div className="relative flex items-center">
                   <input
                     type={showLoginPassword ? 'text' : 'password'}
+                    inputMode={authRole === 'supervisor' ? 'numeric' : undefined}
+                    maxLength={authRole === 'supervisor' ? 4 : undefined}
                     value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder=""
+                    onChange={(e) => {
+                      const val = authRole === 'supervisor'
+                        ? e.target.value.replace(/\D/g, '').slice(0, 4)
+                        : e.target.value;
+                      setLoginPassword(val);
+                    }}
+                    placeholder={authRole === 'supervisor' ? '1234' : ''}
                     className="w-full text-sm font-semibold text-slate-800 placeholder-slate-300 focus:outline-none bg-transparent pt-0.5 pr-8"
                   />
                   <button
@@ -653,6 +862,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 className={`w-full py-3.5 rounded-full text-sm font-bold text-white transition-all mt-1 ${
                   lockoutTimer > 0
                     ? 'bg-slate-400 cursor-not-allowed opacity-80'
+                    : authRole === 'supervisor'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/25 active:scale-[0.99]'
                     : 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/25 active:scale-[0.99]'
                 }`}
               >
@@ -667,20 +878,28 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
               {/* Forgot password link */}
               <div className="text-center pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResetError('');
-                    setResetSuccess('');
-                    setResetPhone(loginPhone || '');
-                    setNewPin('');
-                    setConfirmNewPin('');
-                    setIsForgotModalOpen(true);
-                  }}
-                  className="text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
-                >
-                  {language === 'hi' ? 'पिन भूल गए? (Reset PIN)' : 'Forgot your password?'}
-                </button>
+                {authRole === 'supervisor' ? (
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    {language === 'hi'
+                      ? 'पिन भूल गए? अपने साइट ठेकेदार से रीसेट करवाएं।'
+                      : 'Forgot PIN? Ask your contractor to reset your PIN.'}
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetError('');
+                      setResetSuccess('');
+                      setResetPhone(loginPhone || '');
+                      setNewPin('');
+                      setConfirmNewPin('');
+                      setIsForgotModalOpen(true);
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
+                  >
+                    {language === 'hi' ? 'पिन भूल गए? (Reset PIN)' : 'Forgot your password?'}
+                  </button>
+                )}
               </div>
 
               {/* User-saved Accounts Pill Cards List (Only appears if user previously registered/logged in on this device) */}

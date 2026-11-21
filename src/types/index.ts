@@ -15,6 +15,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 export type SiteWorkStatus = 'planning' | 'ongoing' | 'completed' | 'on_hold';
 export type SitePaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
+export type UserRole = 'owner' | 'supervisor' | 'solo';
 
 export interface ContractorAccount {
   id: string;
@@ -32,6 +33,13 @@ export interface ContractorAccount {
   isAntiDeleteEnabled?: boolean;
   tutorialCompleted: boolean;
   createdAt: string;
+  // Phase 3 Multi-Role & Cloud Sync fields
+  role?: UserRole;
+  organizationId?: string;
+  organizationName?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  assignedSiteIds?: string[];
 }
 
 export type PaymentMode = 'UPI / Online' | 'Cash' | 'Bank Transfer' | 'Cheque';
@@ -206,3 +214,82 @@ export interface TradeConfig {
   }[];
   customWidgets: string[];
 }
+
+// Phase 3 Models for Daily Progress Reporting (DPR), Sync Outbox & Teams
+
+export interface RecordMedia {
+  id?: string;
+  kind: 'photo' | 'audio';
+  storageKey: string;
+  url?: string;
+  mimeType: string;
+  sizeBytes: number;
+  latitude?: number;
+  longitude?: number;
+  accuracyM?: number;
+  capturedAt: string;
+  durationSeconds?: number;
+  flags?: Record<string, any>;
+}
+
+export interface IssueType {
+  id: string;
+  organizationId: string;
+  labelHi: string;
+  labelEn: string;
+  icon?: string;
+  sortOrder: number;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
+export interface RecordAcknowledgement {
+  id: string;
+  recordId: string;
+  ownerId: string;
+  seenAt: string;
+}
+
+export interface DailyRecord {
+  id: string;
+  siteId: string;
+  siteName?: string;
+  recordDate: string; // YYYY-MM-DD
+  status: 'full' | 'half' | 'stopped';
+  capturedAt: string;
+  receivedAt?: string;
+  missingPhoto: boolean;
+  missingVoice: boolean;
+  flags?: Record<string, any>;
+  submittedBy: string;
+  submitterName?: string;
+  clientId: string;
+  issues?: { id: string; labelHi: string; labelEn: string; icon?: string }[];
+  media?: RecordMedia[];
+  acknowledgements?: RecordAcknowledgement[];
+  synced?: boolean;
+}
+
+export interface SupervisorUser {
+  id: string;
+  name: string;
+  phone: string;
+  role: 'supervisor';
+  isActive: boolean;
+  language?: string;
+  assignedSites?: { id: string; name: string }[];
+  createdAt: string;
+}
+
+export interface SyncOutboxItem {
+  id: string;
+  entity: 'daily_record' | 'labour' | 'material' | 'payment' | 'due' | 'task';
+  action: 'create' | 'update' | 'delete';
+  payload: any;
+  mediaBlobs?: { kind: 'photo' | 'audio'; siteId: string; mimeType: string; dataUrl: string }[];
+  status: 'pending' | 'syncing' | 'failed';
+  retryCount: number;
+  errorMessage?: string;
+  createdAt: string;
+}
+

@@ -12,6 +12,10 @@ import type {
   Reminder,
   SmartInsight,
   ClientPayment,
+  DailyRecord,
+  IssueType,
+  RecordAcknowledgement,
+  SyncOutboxItem,
 } from '../../types/index.ts';
 import {
   SEED_ACCOUNT,
@@ -56,6 +60,12 @@ export class SiteSaathiDatabase extends Dexie {
   vendors!: EntityTable<Vendor, 'id'>;
   reminders!: EntityTable<Reminder, 'id'>;
   clientPayments!: EntityTable<ClientPayment, 'id'>;
+  // Phase 3 Tables
+  dailyRecords!: EntityTable<DailyRecord, 'id'>;
+  issueTypes!: EntityTable<IssueType, 'id'>;
+  recordAcknowledgements!: EntityTable<RecordAcknowledgement, 'id'>;
+  syncOutbox!: EntityTable<SyncOutboxItem, 'id'>;
+  syncMeta!: EntityTable<{ key: string; value: string }, 'key'>;
 
   constructor() {
     super('SiteSaathiDB');
@@ -76,6 +86,13 @@ export class SiteSaathiDatabase extends Dexie {
     });
     this.version(4).stores({
       dues: 'id, siteId, vendorId, materialId, status, dueDate',
+    });
+    this.version(5).stores({
+      dailyRecords: 'id, siteId, recordDate, status, submittedBy, clientId',
+      issueTypes: 'id, organizationId, isActive, sortOrder',
+      recordAcknowledgements: 'id, recordId, ownerId, seenAt',
+      syncOutbox: 'id, entity, action, status, createdAt',
+      syncMeta: 'key',
     });
   }
 
