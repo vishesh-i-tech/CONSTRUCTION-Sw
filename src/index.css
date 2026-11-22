@@ -146,6 +146,42 @@
 .bg-theme-elevated { background-color: var(--color-bg-elevated); }
 .bg-theme-subtle { background-color: var(--color-bg-subtle); }
 
+/* Solid High-Contrast Surfaces for Modals & Ported Views */
+.bg-surface {
+  background-color: #FFFFFF !important;
+}
+.dark .bg-surface {
+  background-color: #0F172A !important;
+}
+
+.bg-surface-raised {
+  background-color: #F8FAFC !important;
+}
+.dark .bg-surface-raised {
+  background-color: #1E293B !important;
+}
+
+.border-border {
+  border-color: #E2E8F0 !important;
+}
+.dark .border-border {
+  border-color: #334155 !important;
+}
+
+.text-foreground {
+  color: #0F172A !important;
+}
+.dark .text-foreground {
+  color: #F8FAFC !important;
+}
+
+.text-muted-foreground {
+  color: #64748B !important;
+}
+.dark .text-muted-foreground {
+  color: #94A3B8 !important;
+}
+
 .bg-theme-primary { background-color: var(--color-primary); }
 .bg-theme-primary-hover:hover { background-color: var(--color-primary-hover); }
 .bg-theme-primary-light { background-color: var(--color-primary-light); }

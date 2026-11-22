@@ -40,8 +40,8 @@ async function computeLocalDigest(sitesList: Site[], phone?: string): Promise<Da
   const totalCount = allSites.length;
   const pendingCount = Math.max(0, totalCount - reportedCount);
 
-  const fullDay = todayRecords.filter((r) => r.status === 'full_day').length;
-  const halfDay = todayRecords.filter((r) => r.status === 'half_day').length;
+  const fullDay = todayRecords.filter((r) => r.status === 'full').length;
+  const halfDay = todayRecords.filter((r) => r.status === 'half').length;
   const stopped = todayRecords.filter((r) => r.status === 'stopped').length;
 
   const pendingMaterials = await db.materialRequests.where('status').equals('pending').count().catch(() => 0);
