@@ -1569,3 +1569,17 @@ This document tracks all technologies, libraries, and architectural modules used
   - Renders and compresses each workflow into a standalone `.webm` video stored under `recordings/`.
 - **A short, simple summary:** Automated script providing high-definition video walkthrough clips for every application capability.
 
+---
+
+### 26. Technology: Full-Screen Desktop & Responsive Canvas Layout (`MobileDeviceShell.tsx`, `index.css`)
+- **Name of the Technology:** Full-Screen Responsive Desktop Canvas & Solid Opaque Modals
+- **What it does (Role & Purpose):**
+  - Removes the artificial mobile phone simulator frame on desktop computers, allowing the application to utilize the full screen width and height.
+  - Eliminates dark blue/navy margins and provides a clean, professional `#F4F7FC` background.
+  - Upgrades dialog modals from translucent/glassy surfaces to solid, high-contrast `#FFFFFF` opaque surfaces for optimal readability.
+- **How it works (Under the Hood):**
+  - Refactored `MobileDeviceShell.tsx` to act as a responsive full-width container (`max-w-6xl w-full mx-auto`) with clean padding.
+  - Removed simulated status bars, fake notches, and artificial phone borders on desktop monitors.
+  - Enforced solid background CSS tokens (`.bg-surface { background-color: #FFFFFF !important; }`) across all modal windows.
+- **A short, simple summary:** Full-screen responsive desktop experience with solid white modals and zero dark border bars.
+
