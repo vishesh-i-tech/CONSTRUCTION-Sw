@@ -221,9 +221,9 @@ async function run() {
     if (feedBtn) await feedBtn.click();
     await sleep(1500);
     // Click WhatsApp Digest button inside feed
-    const waBtn = await page.$('button:has-text("WhatsApp"), button:has-text("Digest")');
+    const waBtn = await page.$('button[title*="WhatsApp"], button[title*="व्हाट्सएप"]');
     if (waBtn) await waBtn.click();
-    await sleep(3500);
+    await sleep(4000);
   });
 
   console.log('\n==================================================');

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../core/theme/ThemeContext';
-import { Site, DailyRecord } from '../../types';
+import { Site } from '../../types';
 import { apiGetDailyDigest, DailyDigestResult } from '../../services/apiClient';
+import { db } from '../../core/db/database';
 import {
   X,
   MessageCircle,
   Copy,
   Check,
-  Share2,
-  Calendar,
   Building2,
   CheckCircle2,
   AlertTriangle,
@@ -22,6 +21,70 @@ interface DailyWhatsAppDigestModalProps {
   onClose: () => void;
   sites: Site[];
   ownerPhone?: string;
+}
+
+async function computeLocalDigest(sitesList: Site[], phone?: string): Promise<DailyDigestResult> {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const formattedDate = new Date().toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // Query local records
+  const allSites = sitesList && sitesList.length > 0 ? sitesList : await db.sites.toArray().catch(() => []);
+  const todayRecords = await db.dailyRecords.where('recordDate').equals(todayStr).toArray().catch(() => []);
+
+  const reportedSiteIds = new Set(todayRecords.map((r) => r.siteId));
+  const reportedCount = reportedSiteIds.size;
+  const totalCount = allSites.length;
+  const pendingCount = Math.max(0, totalCount - reportedCount);
+
+  const fullDay = todayRecords.filter((r) => r.status === 'full_day').length;
+  const halfDay = todayRecords.filter((r) => r.status === 'half_day').length;
+  const stopped = todayRecords.filter((r) => r.status === 'stopped').length;
+
+  const pendingMaterials = await db.materialRequests.where('status').equals('pending').count().catch(() => 0);
+  const allTasks = await db.siteTasks.toArray().catch(() => []);
+  const overdueTasks = allTasks.filter((t) => t.status !== 'done' && t.dueDate && t.dueDate < todayStr).length;
+
+  const msg =
+    `🏗️ *SiteSaathi — Daily Site Executive Digest*\n` +
+    `📅 *Date:* ${formattedDate} (IST)\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📊 *Sites Overview:*\n` +
+    `• Total Active Sites: *${totalCount}*\n` +
+    `• Reports Submitted: *${reportedCount}*\n` +
+    `• Pending DPRs: *${pendingCount}*\n\n` +
+    `⚙️ *Work Status Breakdown:*\n` +
+    `• Full Day Work: *${fullDay}*\n` +
+    `• Half Day Work: *${halfDay}*\n` +
+    `• Work Stopped: *${stopped}*\n\n` +
+    `⚠️ *Operational Bottlenecks:*\n` +
+    `• Pending Material Indents: *${pendingMaterials}*\n` +
+    `• Overdue Punch Tasks: *${overdueTasks}*\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📲 *Open SiteSaathi & Review DPR:*\n` +
+    `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'}`;
+
+  const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+  const waLink = cleanPhone
+    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+
+  return {
+    date: todayStr,
+    totalSites: totalCount,
+    reportedSites: reportedCount,
+    pendingSites: pendingCount,
+    fullDayCount: fullDay,
+    halfDayCount: halfDay,
+    stoppedCount: stopped,
+    pendingMaterialsCount: pendingMaterials,
+    overdueTasksCount: overdueTasks,
+    messageText: msg,
+    waLink,
+  };
 }
 
 export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> = ({
@@ -42,40 +105,36 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
   useEffect(() => {
     if (!isOpen) return;
 
+    let isMounted = true;
     setIsLoading(true);
-    apiGetDailyDigest(customPhone)
-      .then((res) => {
+
+    const loadDigest = async () => {
+      let finalDigest: DailyDigestResult | null = null;
+      try {
+        const res = await apiGetDailyDigest(customPhone);
         if (res.data?.digest) {
-          setDigest(res.data.digest);
+          finalDigest = res.data.digest;
         }
-      })
-      .catch((err) => {
-        console.warn('Backend digest fetch failed, generating local summary:', err);
-        // Fallback local digest
-        const today = new Date().toLocaleDateString('en-IN', {
-          dateStyle: 'medium',
-          timeZone: 'Asia/Kolkata',
-        });
-        const total = sites.length;
-        const msg = `🏗️ *SiteSaathi — Daily Site Digest*\n📅 *Date:* ${today} (IST)\n━━━━━━━━━━━━━━━━━━\n📊 *Active Sites:* *${total}*\n📲 *Open SiteSaathi:*\nhttps://sitesaathi.app/dashboard`;
-        setDigest({
-          date: new Date().toISOString().slice(0, 10),
-          totalSites: total,
-          reportedSites: 0,
-          pendingSites: total,
-          fullDayCount: 0,
-          halfDayCount: 0,
-          stoppedCount: 0,
-          pendingMaterialsCount: 0,
-          overdueTasksCount: 0,
-          messageText: msg,
-          waLink: `https://wa.me/?text=${encodeURIComponent(msg)}`,
-        });
-      })
-      .finally(() => {
+      } catch {
+        // Fall back to local calculation
+      }
+
+      if (!finalDigest) {
+        finalDigest = await computeLocalDigest(sites, customPhone);
+      }
+
+      if (isMounted) {
+        setDigest(finalDigest);
         setIsLoading(false);
-      });
-  }, [isOpen, customPhone, sites.length]);
+      }
+    };
+
+    loadDigest();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, customPhone, sites]);
 
   if (!isOpen) return null;
 
@@ -90,14 +149,32 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
     }
   };
 
+  const getWhatsAppUrl = () => {
+    if (!digest) return 'https://api.whatsapp.com/send';
+    const cleanPhone = customPhone.replace(/\D/g, '');
+    const encoded = encodeURIComponent(digest.messageText);
+    return cleanPhone
+      ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`
+      : `https://api.whatsapp.com/send?text=${encoded}`;
+  };
+
   const handleOpenWhatsApp = () => {
     if (!digest) return;
-    const cleanPhone = customPhone.replace(/\D/g, '');
-    const url = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(digest.messageText)}`
-      : `https://wa.me/?text=${encodeURIComponent(digest.messageText)}`;
-
-    window.open(url, '_blank');
+    const url = getWhatsAppUrl();
+    try {
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch {
+      window.location.href = url;
+    }
   };
 
   return (
@@ -107,7 +184,6 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
 
       {/* Dialog Container */}
       <div className="relative z-10 bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh] animate-slide-in">
-        
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-emerald-50/70 to-teal-50/50 dark:from-slate-800/80 dark:to-slate-800/60">
           <div className="flex items-center gap-2.5">
@@ -133,11 +209,12 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
 
         {/* Scrollable Content */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
-          
           {isLoading ? (
             <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
               <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-              <p className="text-xs font-semibold">{isHi ? 'आज का सारांश तैयार हो रहा है...' : 'Compiling today\'s site summary...'}</p>
+              <p className="text-xs font-semibold">
+                {isHi ? 'आज का सारांश तैयार हो रहा है...' : "Compiling today's site summary..."}
+              </p>
             </div>
           ) : digest ? (
             <>
@@ -156,7 +233,11 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
                     {isHi ? 'सामान पेंडिंग' : 'Materials'}
                   </span>
-                  <span className={`text-base font-black mt-0.5 block ${digest.pendingMaterialsCount > 0 ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                  <span
+                    className={`text-base font-black mt-0.5 block ${
+                      digest.pendingMaterialsCount > 0 ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
                     {digest.pendingMaterialsCount}
                   </span>
                 </div>
@@ -165,7 +246,11 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
                     {isHi ? 'ओवरड्यू टास्क' : 'Overdue Tasks'}
                   </span>
-                  <span className={`text-base font-black mt-0.5 block ${digest.overdueTasksCount > 0 ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                  <span
+                    className={`text-base font-black mt-0.5 block ${
+                      digest.overdueTasksCount > 0 ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
                     {digest.overdueTasksCount}
                   </span>
                 </div>
@@ -208,21 +293,45 @@ export const DailyWhatsAppDigestModal: React.FC<DailyWhatsAppDigestModalProps> =
 
               {/* 1-Tap Action Buttons */}
               <div className="pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleOpenWhatsApp}
-                  className="w-full py-3.5 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-black shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                <a
+                  href={getWhatsAppUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    // Also trigger open in case anchor is styled button
+                    handleOpenWhatsApp();
+                    e.preventDefault();
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-black shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer no-underline text-center"
                 >
                   <MessageCircle className="w-4 h-4 fill-white" />
-                  <span>{isHi ? 'व्हाट्सएप पर 1-टैप में साझा करें' : '1-Tap Share to WhatsApp'}</span>
+                  <span>{isHi ? 'व्हाट्सएप पर 1-टैप में खोलें व साझा करें' : '1-Tap Open & Share on WhatsApp'}</span>
                   <ExternalLink className="w-3.5 h-3.5" />
-                </button>
+                </a>
+
+                {/* Direct fallback link in case popup was blocked */}
+                <p className="text-[10px] text-center text-slate-400">
+                  {isHi ? 'यदि नया टैब न खुले, तो ' : "If WhatsApp doesn't open automatically, "}
+                  <a
+                    href={getWhatsAppUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-600 dark:text-emerald-400 underline font-semibold"
+                  >
+                    {isHi ? 'यहाँ क्लिक करें' : 'click here directly'}
+                  </a>
+                </p>
               </div>
             </>
-          ) : null}
-
+          ) : (
+            <div className="py-8 text-center text-slate-400 space-y-2">
+              <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
+              <p className="text-xs font-semibold">
+                {isHi ? 'सारांश लोड नहीं हो सका। कृपया पुनः प्रयास करें।' : 'Could not compile digest. Please try again.'}
+              </p>
+            </div>
+          )}
         </div>
-
       </div>
     </div>
   );
