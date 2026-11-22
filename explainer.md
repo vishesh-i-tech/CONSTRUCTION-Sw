@@ -1556,7 +1556,16 @@ This document tracks all technologies, libraries, and architectural modules used
   - Provides native Meta WhatsApp Business Cloud Graph API integration (`POST /api/v1/whatsapp/send-digest`) for Pro-tier automated message dispatch.
 - **A short, simple summary:** Comprehensive daily site summary delivered at 8:30 PM IST via 1-tap WhatsApp sharing or automated Meta Cloud API.
 
+---
 
-
-
+### 25. Technology: Automated Feature Screen Recording & Video Generation Suite (`scripts/record-feature-clips.cjs`, Playwright, FFmpeg)
+- **Name of the Technology:** Headless Browser Video Capture Engine
+- **What it does (Role & Purpose):**
+  - Generates crisp, isolated screen recording video clips (`.webm`) for every individual feature and operational workflow across the application.
+  - Allows contractors, investors, and clients to review actual user interactions, workflows, and UI transitions without manual screen recording software.
+- **How it works (Under the Hood):**
+  - Uses Playwright Chromium/Edge engine configured with `recordVideo` and mobile viewport (`440x920`).
+  - Automatically seeds an authentic contractor account into Dexie IndexedDB and simulates realistic user taps, scrolls, modal transitions, and form interactions.
+  - Renders and compresses each workflow into a standalone `.webm` video stored under `recordings/`.
+- **A short, simple summary:** Automated script providing high-definition video walkthrough clips for every application capability.
 

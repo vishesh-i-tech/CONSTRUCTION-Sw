@@ -52,6 +52,7 @@
     "autoprefixer": "^10.5.5",
     "fake-indexeddb": "^6.2.8",
     "oxlint": "^1.79.0",
+    "playwright": "^1.65.1",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
